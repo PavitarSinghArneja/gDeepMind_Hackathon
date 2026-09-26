@@ -13,28 +13,38 @@ async function api(path, opts = {}) {
 }
 const post = (path, data = {}) => api(path, { method: "POST", body: JSON.stringify(data) });
 
+const KIND = { bill: "Bill", bank_statement: "Bank statement", payment_receipt: "Payment receipt", salary_slip: "Salary slip",
+  prescription: "Prescription", lab_report: "Lab report", insurance_card: "Insurance card", id_document: "ID document",
+  credential: "Password or code", travel_ticket: "Travel ticket", personal_photo: "Photo", other: "Other document" };
+const kindOf = (t) => KIND[t] || "Not identified yet";
+
 // ---------- live feed ----------
-function addEvent(ev) {
+const STEP_LABEL = { sense: "Read", triage: "Identify", extract: "Details", verify: "Check", plan: "Plan", policy: "Privacy rules",
+  act: "Action", done: "Done", handoff: "Needs you", human: "You", learn: "Rule", recover: "Recovery", model: "Model",
+  retry: "Retry", error: "Problem", undo: "Undo" };
+
+function addEvent(ev, fresh = false) {
   const li = document.createElement("li");
-  li.className = `ev lvl-${ev.level} st-${ev.stage}`;
+  li.className = `ev lvl-${ev.level} st-${ev.stage}${fresh ? " fresh" : ""}`;
   const time = new Date(ev.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  li.innerHTML = `<span class="t">${time}</span><span class="stage">${esc(ev.stage)}</span><span class="msg">${esc(ev.message)}</span>` +
-    (ev.file_id ? `<button class="fid link" data-id="${ev.file_id}">#${ev.file_id}</button>` : "");
+  li.innerHTML = `<div class="meta"><span class="step">${esc(STEP_LABEL[ev.stage] || ev.stage)}</span>` +
+    `<span>${ev.file_id ? `<button class="fid link" data-id="${ev.file_id}">file ${ev.file_id}</button> ` : ""}${time}</span></div>` +
+    `<div class="msg">${esc(ev.message)}</div>`;
   const feed = $("#feed");
   feed.prepend(li);
-  while (feed.children.length > 400) feed.lastChild.remove();
+  while (feed.children.length > 300) feed.lastChild.remove();
 }
 
 async function startFeed() {
   const recent = await api("/api/events/recent");
-  recent.forEach(addEvent);
+  recent.forEach((e) => addEvent(e));
   const last = recent.length ? recent[recent.length - 1].id : 0;
   const es = new EventSource(`/api/events?after=${last}`);
-  es.onmessage = (m) => { addEvent(JSON.parse(m.data)); scheduleRefresh(); };
+  es.onmessage = (m) => { addEvent(JSON.parse(m.data), true); scheduleRefresh(); };
 }
 
 let refreshTimer;
-function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshAll, 350); }
+function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshAll, 400); }
 function refreshAll() { return Promise.allSettled([refreshState(), refreshLibrary(), refreshInbox(), refreshReminders(), refreshRules()]); }
 
 // ---------- header ----------
@@ -43,19 +53,35 @@ async function refreshState() {
   const { network, models, tasks, stats } = STATE;
   const offline = network.internet === false;
   const net = $("#pill-net");
-  net.textContent = `${offline ? "Offline" : "Online"} · ${network.outbound.length} outbound connections`;
-  net.className = `pill ${offline && network.outbound.length === 0 ? "good" : "warn"}`;
+  net.textContent = offline ? `Offline, ${network.outbound.length} outside connections` : `Online, ${network.outbound.length} outside connections from SnapSort`;
+  net.className = `pill ${network.outbound.length ? "bad" : offline ? "good" : "warn"}`;
   const model = $("#pill-model");
-  model.textContent = models.available ? `${models.triage} + ${models.work} on-device` : "Model not running. Files will wait.";
+  model.textContent = models.available ? `Gemma 4 running on this laptop` : "Gemma isn't running. Files will wait.";
+  model.title = `${models.triage} identifies files, ${models.work} reads details and answers`;
   model.className = `pill ${models.available ? "good" : "bad"}`;
   const waiting = (tasks.queued || 0) + (tasks.running || 0);
-  $("#pill-queue").textContent = `${waiting} in queue · ${stats.files} files · ${stats.avg_seconds ?? "–"}s per file`;
+  const q = $("#pill-queue");
+  q.textContent = waiting ? `Working on ${waiting} file${waiting === 1 ? "" : "s"}` : "All caught up";
+  q.className = `pill ${waiting ? "warn" : "good"}`;
+  const s = stats.by_status || {};
+  $("#summary").textContent = `${stats.files} files looked after. ${s.done || 0} handled on their own, ${stats.inbox_open} waiting for you` +
+    (stats.avg_seconds ? `, about ${stats.avg_seconds}s each.` : ".");
 }
 
 // ---------- library ----------
 const TABS = { all: "All", bill: "Bills", bank_statement: "Statements", payment_receipt: "Receipts", salary_slip: "Salary",
   prescription: "Prescriptions", lab_report: "Lab reports", insurance_card: "Insurance", id_document: "IDs",
-  credential: "Secrets", travel_ticket: "Travel", personal_photo: "Photos", other: "Other" };
+  credential: "Passwords", travel_ticket: "Travel", personal_photo: "Photos", other: "Other" };
+
+function stateOf(f) {
+  if (f.status === "needs_human") return ["Waiting for you", "wait"];
+  if (f.status === "queued" || f.status === "running") return ["Working on it", "wait"];
+  if (f.status === "failed") return ["Couldn't process this", "bad"];
+  if (f.vaulted) return ["Locked in the vault", "ok"];
+  if (f.duplicate_of) return [`Copy of file ${f.duplicate_of}, left in place`, "ok"];
+  if (f.location.startsWith("library/")) return [`Filed in ${f.location.split("/").slice(1, -1).join("/")}`, "ok"];
+  return ["Indexed so you can search it", "ok"];
+}
 
 async function refreshLibrary() {
   const files = await api("/api/files");
@@ -63,39 +89,34 @@ async function refreshLibrary() {
   files.forEach((f) => { counts[f.doc_type] = (counts[f.doc_type] || 0) + 1; });
   $("#tabs").innerHTML = Object.entries(TABS)
     .filter(([k]) => k === "all" || counts[k])
-    .map(([k, name]) => `<button class="tab ${k === currentTab ? "on" : ""}" data-tab="${k}">${name} <small>${k === "all" ? files.length : counts[k]}</small></button>`)
+    .map(([k, name]) => `<button class="tab ${k === currentTab ? "on" : ""}" data-tab="${k}" aria-pressed="${k === currentTab}">${name} <small>${k === "all" ? files.length : counts[k]}</small></button>`)
     .join("");
   const shown = files.filter((f) => currentTab === "all" || f.doc_type === currentTab);
-  $("#library").innerHTML = shown.map(card).join("") || `<p class="empty">Nothing here yet.</p>`;
+  $("#library").innerHTML = shown.map(card).join("") ||
+    `<p class="empty">Drop a file into mock/Downloads, mock/Screenshots or mock/Desktop and it will show up here.</p>`;
 }
 
 function card(f) {
-  const badges = [
-    f.status === "needs_human" && ["needs you", "warn"],
-    f.status === "queued" && ["working…", ""],
-    f.status === "failed" && ["couldn't read", "bad"],
-    f.duplicate_of && [`duplicate of #${f.duplicate_of}`, ""],
-    f.vaulted && ["in vault", "good"],
-  ].filter(Boolean);
-  const kv = Object.entries(f.fields || {}).filter(([, v]) => v && typeof v !== "object").slice(0, 3);
-  return `<article class="card sens-${f.sensitivity || "low"}" data-id="${f.id}">
-    <div class="type">${esc(label(f.doc_type) || "reading…")}</div>
+  const [state, cls] = stateOf(f);
+  const kv = Object.entries(f.fields || {}).filter(([k, v]) => v && typeof v !== "object" && k !== "description").slice(0, 3)
+    .map(([k, v]) => [k, String(v).length > 48 ? String(v).slice(0, 46) + "…" : v]);
+  return `<article class="card st-${f.status} sens-${f.sensitivity || "low"}" data-id="${f.id}" tabindex="0" role="button" aria-label="Open ${esc(f.title || f.name)}">
+    <div class="kind">${esc(kindOf(f.doc_type))}</div>
     <h3>${esc(f.title || f.name)}</h3>
     ${f.summary ? `<p class="sum">${esc(f.summary)}</p>` : ""}
-    ${kv.length ? `<dl>${kv.map(([k, v]) => `<dt>${esc(label(k))}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
-    <div class="badges">${badges.map(([b, cls]) => `<span class="badge ${cls}">${esc(b)}</span>`).join("")}</div>
-    <div class="path">${esc(f.location)}</div>
+    ${kv.length ? `<dl class="kv">${kv.map(([k, v]) => `<dt>${esc(label(k))}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
+    <div class="state ${cls}">${esc(state)}</div>
   </article>`;
 }
 
-// ---------- inbox ----------
+// ---------- needs you ----------
 function describeAction(a) {
-  if (a.tool === "file_document") return `→ ${a.args.folder}/${a.args.name}`;
-  if (a.tool === "create_reminder") return `“${a.args.title}” by ${a.args.due_date}`;
-  if (a.tool === "vault") return "encrypt it and move it to the vault";
-  if (a.tool === "mark_duplicate") return `same as #${a.args.of_file_id}`;
-  if (a.tool === "flag_for_review") return a.args.reason || "";
-  return "";
+  if (a.tool === "file_document") return `File it in ${a.args.folder} as ${a.args.name}`;
+  if (a.tool === "create_reminder") return `Remind you: ${a.args.title}, by ${a.args.due_date}`;
+  if (a.tool === "vault") return "Encrypt it and move it to the vault";
+  if (a.tool === "mark_duplicate") return `Mark it as a copy of file ${a.args.of_file_id}`;
+  if (a.tool === "flag_for_review") return `Flag for you: ${a.args.reason || ""}`;
+  return `${label(a.tool)} (not allowed, blocked)`;
 }
 
 async function refreshInbox() {
@@ -107,17 +128,18 @@ async function refreshInbox() {
     const doable = it.actions.some((a) => a.tool !== "flag_for_review");
     const folders = fileAct ? [...new Set([fileAct.args.folder, ...STATE.folders])] : [];
     return `<div class="inbox-item" data-id="${it.id}">
-      <div class="who"><button class="fid link" data-id="${it.file_id}">${esc(it.title || it.name)}</button> <span class="type">${esc(label(it.doc_type))}</span></div>
-      <p class="reason">${esc(it.reason)}</p>
-      ${it.actions.length ? `<ul class="acts">${it.actions.map((a) => `<li><b>${esc(label(a.tool))}</b> ${esc(describeAction(a))}${a.why ? `<br><small>why: ${esc(a.why)}</small>` : ""}</li>`).join("")}</ul>` : ""}
+      <div class="who"><button class="fid link" data-id="${it.file_id}">${esc(it.title || it.name)}</button></div>
+      <div class="kind">${esc(kindOf(it.doc_type))}</div>
+      <p class="reason">${esc(it.reason.charAt(0).toUpperCase() + it.reason.slice(1))}</p>
+      ${it.actions.length ? `<p class="kind">If you approve, I will:</p><ul class="acts">${it.actions.map((a) => `<li>${esc(describeAction(a))}</li>`).join("")}</ul>` : ""}
       ${fileAct ? `<label>Folder <select class="folder">${folders.map((f) => `<option ${f === fileAct.args.folder ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>` : ""}
-      ${remind ? `<label>Due <input type="date" class="due" value="${esc(remind.args.due_date)}"></label>` : ""}
+      ${remind ? `<label>Due date <input type="date" class="due" value="${esc(remind.args.due_date)}"></label>` : ""}
       <div class="btns">
         <button class="approve primary">${doable ? "Approve" : "Got it"}</button>
-        ${doable ? `<button class="reject">Leave it</button><label class="remember"><input type="checkbox" class="learn" checked> remember</label>` : ""}
+        ${doable ? `<button class="reject">Leave it as is</button><label class="remember"><input type="checkbox" class="learn" checked> Remember this choice</label>` : ""}
       </div>
     </div>`;
-  }).join("") || `<p class="empty">All clear. Nothing needs you.</p>`;
+  }).join("") || `<p class="empty">Nothing needs you right now.</p>`;
 }
 
 async function approveItem(el) {
@@ -141,54 +163,149 @@ function daysText(d) {
   if (d === null) return "";
   if (d < 0) return "overdue";
   if (d === 0) return "today";
-  return `${d} day${d === 1 ? "" : "s"}`;
+  return `in ${d} day${d === 1 ? "" : "s"}`;
 }
 
 async function refreshReminders() {
   const rs = await api("/api/reminders");
   $("#reminders").innerHTML = rs.map((r) => `<li class="${r.days_left !== null && r.days_left <= 3 ? "soon" : ""}">
       <button class="fid link" data-id="${r.file_id}">${esc(r.title)}</button>
-      <span>${esc(r.due_date)} · ${daysText(r.days_left)}</span>
-      <button class="done-reminder small" data-id="${r.id}">done</button></li>`).join("")
-    || `<li class="empty">No upcoming payments.</li>`;
+      <span class="when">${esc(r.due_date)}, ${daysText(r.days_left)} <button class="done-reminder small" data-id="${r.id}">Mark paid</button></span></li>`).join("")
+    || `<li class="empty">No payments or renewals coming up.</li>`;
 }
 
 async function refreshRules() {
   const rs = await api("/api/rules");
-  $("#rules").innerHTML = rs.map((r) => `<li><span>#${r.id} ${esc(r.text)} <small class="muted">used ${r.hits}×</small></span>
-      <button class="forget small" data-id="${r.id}">forget</button></li>`).join("")
-    || `<li class="empty">Correct one of my decisions and I'll remember it.</li>`;
+  $("#rules").innerHTML = rs.map((r) => `<li><span>${esc(r.text[0].toUpperCase() + r.text.slice(1))} <span class="when">used ${r.hits} time${r.hits === 1 ? "" : "s"}</span></span>
+      <button class="forget small" data-id="${r.id}">Forget</button></li>`).join("")
+    || `<li class="empty">Move a file to a different folder and I'll remember where that kind of file goes.</li>`;
+}
+
+// ---------- the pipeline for one file ----------
+const STEPS = [
+  { id: "sense", name: "Noticed and read the file" },
+  { id: "triage", name: "Worked out what it is" },
+  { id: "extract", name: "Pulled out the details" },
+  { id: "check", name: "Checked the details against the document" },
+  { id: "plan", name: "Decided what to do" },
+  { id: "gate", name: "Applied your privacy rules" },
+  { id: "act", name: "Took action" },
+  { id: "confirm", name: "Confirmed the changes on disk" },
+  { id: "outcome", name: "Result" },
+];
+
+function buildPipeline(d) {
+  const steps = Object.fromEntries(STEPS.map((s) => [s.id, { ...s, events: [], notes: [] }]));
+  let current = "sense";
+  let afterHandoff = false;
+  for (const e of d.timeline) {
+    let id = null;
+    if (e.stage === "sense") id = "sense";
+    else if (e.stage === "triage") id = "triage";
+    else if (e.stage === "extract") id = "extract";
+    else if (e.stage === "verify") id = /confirmed on disk/.test(e.message) ? "confirm" : "check";
+    else if (e.stage === "plan" || e.stage === "learn") id = "plan";
+    else if (e.stage === "policy") id = "gate";
+    else if (e.stage === "act") id = afterHandoff ? "outcome" : "act";
+    else if (["handoff", "human", "done", "undo"].includes(e.stage)) { id = "outcome"; if (e.stage === "handoff") afterHandoff = true; }
+    if (id) { steps[id].events.push(e); current = id; } else steps[current].notes.push(e);  // recovery, retries, model problems
+  }
+  const handoff = d.timeline.some((e) => e.stage === "handoff");
+  const blocked = steps.gate.events.length > 0;
+  if (!blocked && steps.plan.events.length) {
+    steps.gate.synthetic = handoff ? "Some actions need your OK, so I held them for you." : "Everything in the plan is allowed to run on its own.";
+  }
+  let prevEnd = d.timeline.length ? d.timeline[0].ts : 0;
+  return STEPS.map((s) => {
+    const st = steps[s.id];
+    const all = [...st.events, ...st.notes];
+    let status = st.events.length || st.synthetic ? "ok" : "skip";
+    if (all.some((e) => e.level === "warn")) status = "warn";
+    if (all.some((e) => e.level === "error")) status = "bad";
+    let secs = null;
+    if (st.events.length) {
+      const end = Math.max(...st.events.map((e) => e.ts));
+      secs = Math.max(0, end - prevEnd);
+      prevEnd = end;
+    }
+    return { ...st, status, secs };
+  });
+}
+
+function stepBody(step, d) {
+  if (step.status === "skip") {
+    const why = { act: "Nothing ran on its own for this file.", confirm: "Nothing to confirm.", extract: "Skipped for this file.",
+      triage: "Skipped for this file.", check: "Skipped for this file.", plan: "Skipped for this file." };
+    return `<p>${why[step.id] || "Not reached yet."}</p>`;
+  }
+  const lines = step.events.map((e) => {
+    const model = (e.message.match(/gemma\d[\w.]*:[a-z0-9]+/i) || [])[0];
+    const text = e.message.replace(/ sure, gemma\d[\w.]*:[a-z0-9]+\)/i, " sure)").replace(/ with gemma\d[\w.]*:[a-z0-9]+/i, "");
+    return `<p>${esc(text)}${model ? `<span class="model">${esc(model)}</span>` : ""}</p>`;
+  });
+  if (step.synthetic) lines.push(`<p>${esc(step.synthetic)}</p>`);
+  if (step.id === "check" && d.checks.length) {
+    lines.push(`<ul class="checks">${d.checks.map((c) => `<li class="${c.ok ? "ok" : "fail"}">${esc(c.detail)}</li>`).join("")}</ul>`);
+  }
+  step.notes.forEach((n) => lines.push(`<p class="note">${esc(n.message)}</p>`));
+  return lines.join("");
+}
+
+function fmtSecs(s) {
+  if (s === null) return "";
+  return s < 1 ? "under 1s" : `${s.toFixed(1)}s`;
 }
 
 // ---------- drawer ----------
 function previewTag(url, name) {
   const ext = name.split(".").pop().toLowerCase();
-  if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) return `<img class="preview" src="${url}" alt="">`;
-  if (["pdf", "txt", "md", "csv"].includes(ext)) return `<iframe class="preview" src="${url}"></iframe>`;
-  return `<div class="locked">No preview for this file type.</div>`;
+  if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext)) return `<img class="preview" src="${url}" alt="Preview of ${esc(name)}">`;
+  if (["pdf", "txt", "md", "csv"].includes(ext)) return `<iframe class="preview" src="${url}" title="Preview of ${esc(name)}"></iframe>`;
+  return `<div class="locked">No preview for this kind of file.</div>`;
 }
 
 async function openDrawer(id, reveal = false) {
   const d = reveal ? await post(`/api/files/${id}/reveal`) : await api(`/api/files/${id}`);
   const preview = d.vaulted
-    ? (reveal ? previewTag(`/api/files/${id}/preview?reveal=true`, d.original_name) : `<div class="locked">Encrypted in the vault.</div>`)
+    ? (reveal ? previewTag(`/api/files/${id}/preview?reveal=true`, d.original_name) : `<div class="locked">Encrypted in the vault. Reveal it to view.</div>`)
     : previewTag(`/api/files/${id}/preview`, d.name);
   const masked = d.vaulted || JSON.stringify(d.fields).includes("•");
-  $("#drawer").innerHTML = `<button class="close">×</button>
-    <div class="type">${esc(label(d.doc_type))} · ${esc(d.sensitivity || "")} sensitivity${d.confidence != null ? ` · ${Math.round(d.confidence * 100)}% sure` : ""}</div>
-    <h2>${esc(d.title || d.name)}</h2>
-    <p class="sum">${esc(d.summary || "")}</p>
+  const [state, cls] = stateOf(d);
+  const pipeline = buildPipeline(d);
+  const total = d.timeline.length > 1 ? d.timeline[d.timeline.length - 1].ts - d.timeline[0].ts : 0;
+  $("#drawer").innerHTML = `<button class="close" aria-label="Close">Close</button>
+    <div class="kind">${esc(kindOf(d.doc_type))}${d.confidence != null ? `, ${Math.round(d.confidence * 100)}% sure` : ""}</div>
+    <h2 class="title">${esc(d.title || d.name)}</h2>
+    <div class="card-state state ${cls}">${esc(state)}</div>
+    ${d.summary ? `<p>${esc(d.summary)}</p>` : ""}
+
+    <h3>How I handled it${total ? ` <span class="step-time">${fmtSecs(total)} in total</span>` : ""}</h3>
+    <ol class="pipeline">${pipeline.map((s) => `<li class="${s.status}">
+        <div class="step-head"><span class="step-name">${esc(s.name)}</span><span class="step-time">${fmtSecs(s.secs)}</span></div>
+        <div class="step-body">${stepBody(s, d)}</div></li>`).join("")}</ol>
+
+    <h3>The file</h3>
     ${preview}
-    ${Object.keys(d.fields).length ? `<h4>Details</h4><dl>${Object.entries(d.fields).map(([k, v]) => `<dt>${esc(label(k))}</dt><dd>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</dd>`).join("")}</dl>` : ""}
+    ${Object.keys(d.fields).length ? `<dl class="kv" style="margin-top:12px">${Object.entries(d.fields).map(([k, v]) => `<dt>${esc(label(k))}</dt><dd>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</dd>`).join("")}</dl>` : ""}
     ${!reveal && masked ? `<button class="reveal" data-id="${id}">Reveal protected values</button>` : ""}
-    ${d.checks.length ? `<h4>Checks</h4><ul class="checks">${d.checks.map((c) => `<li class="${c.ok ? "ok" : "fail"}">${c.ok ? "✓" : "✗"} ${esc(c.detail)}</li>`).join("")}</ul>` : ""}
-    <h4>Where it is</h4><p class="path">${esc(d.location)}<br><small>originally ${esc(d.original_location)}</small></p>
-    ${d.vaulted ? "" : `<label>Move to <select class="refile"><option value="" selected disabled>Choose a folder…</option>${STATE.folders.map((f) => `<option>${esc(f)}</option>`).join("")}</select></label> <button class="do-refile small" data-id="${id}">Move</button>`}
-    ${d.journal.length ? `<h4>What I did</h4><ul class="rules">${d.journal.map((j) => `<li><span>${esc(label(j.tool))} · ${esc(j.status)}</span>${j.status === "applied" ? `<button class="undo small" data-id="${j.id}">undo</button>` : ""}</li>`).join("")}</ul>` : ""}
-    <h4>Timeline</h4><ol class="timeline">${d.timeline.map((e) => `<li class="lvl-${e.level}"><span class="stage">${esc(e.stage)}</span> ${esc(e.message)}</li>`).join("")}</ol>`;
+    <p class="where">Now at <b>${esc(d.location)}</b><br>Originally ${esc(d.original_location)}</p>
+    ${d.vaulted ? "" : `<div class="row"><label>Move to <select class="refile"><option value="" selected disabled>Choose a folder</option>${STATE.folders.map((f) => `<option>${esc(f)}</option>`).join("")}</select></label>
+      <button class="do-refile small" data-id="${id}">Move</button></div>`}
+    ${d.journal.length ? `<h3>Changes I made</h3><ul class="list">${d.journal.map((j) => `<li><span>${esc(describeJournal(j))} <span class="when">${esc(j.status === "applied" ? "done" : j.status)}</span></span>${j.status === "applied" ? `<button class="undo small" data-id="${j.id}">Undo</button>` : ""}</li>`).join("")}</ul>` : ""}`;
   $("#drawer").classList.remove("hidden");
+  $("#scrim").classList.remove("hidden");
+  $(".close", $("#drawer")).focus();
 }
-const closeDrawer = () => $("#drawer").classList.add("hidden");
+
+function describeJournal(j) {
+  if (j.tool === "file_document") return `Moved to ${j.args.dest.split("/library/").pop()}`;
+  if (j.tool === "vault") return "Encrypted into the vault";
+  if (j.tool === "create_reminder") return `Reminder: ${j.args.title}, by ${j.args.due_date}`;
+  if (j.tool === "mark_duplicate") return `Marked as a copy of file ${j.args.of_file_id}`;
+  return label(j.tool);
+}
+
+const closeDrawer = () => { $("#drawer").classList.add("hidden"); $("#scrim").classList.add("hidden"); };
 
 // ---------- ask ----------
 $("#ask").addEventListener("submit", async (e) => {
@@ -197,19 +314,21 @@ $("#ask").addEventListener("submit", async (e) => {
   if (!q) return;
   const box = $("#answer");
   box.classList.remove("hidden");
-  box.innerHTML = `<p class="muted">Thinking on-device…</p>`;
+  box.innerHTML = `<p class="hint">Looking through your files on this laptop…</p>`;
   try {
     const r = await post("/api/ask", { question: q });
     box.innerHTML = `<div class="ans ${r.sensitive ? "blur" : ""}" title="${r.sensitive ? "Click to reveal" : ""}">${esc(r.answer)}</div>
-      ${r.grounded === false ? `<p class="warn">I couldn't tie this to a specific file.</p>` : ""}
-      ${r.files && r.files.length ? `<div class="cites">Sources: ${r.files.map((f) => `<button class="fid link" data-id="${f.id}">${esc(f.title || f.name)}</button>`).join(" ")}</div>` : ""}`;
+      ${r.sensitive ? `<p class="hint">This answer contains a secret. Click it to reveal.</p>` : ""}
+      ${r.grounded === false ? `<p class="hint">I couldn't point to the exact file for this, so check the sources below.</p>` : ""}
+      ${r.files && r.files.length ? `<div class="cites">From: ${r.files.map((f) => `<button class="fid link" data-id="${f.id}">${esc(f.title || f.name)}</button>`).join(" ")}</div>` : ""}`;
   } catch (err) {
-    box.innerHTML = `<p class="warn">${esc(err.message)}</p>`;
+    box.innerHTML = `<p class="hint">${esc(err.message)}</p>`;
   }
 });
 
-// ---------- clicks ----------
+// ---------- clicks & keys ----------
 document.addEventListener("click", async (e) => {
+  if (e.target.id === "scrim") return closeDrawer();
   const t = e.target.closest("button, .card, .blur");
   if (!t) return;
   const has = (c) => t.classList.contains(c);
@@ -224,12 +343,21 @@ document.addEventListener("click", async (e) => {
     if (has("close")) return closeDrawer();
     if (has("reveal")) return openDrawer(t.dataset.id, true);
     if (has("undo")) { await post(`/api/journal/${t.dataset.id}/undo`); closeDrawer(); return scheduleRefresh(); }
-    if (has("do-refile")) { if (!$(".refile").value) return alert("Choose a folder first."); await post(`/api/files/${t.dataset.id}/refile`, { folder: $(".refile").value }); closeDrawer(); return scheduleRefresh(); }
+    if (has("do-refile")) {
+      const folder = $(".refile").value;
+      if (!folder) return alert("Choose a folder first.");
+      await post(`/api/files/${t.dataset.id}/refile`, { folder });
+      closeDrawer();
+      return scheduleRefresh();
+    }
   } catch (err) {
     alert(err.message);
   }
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDrawer();
+  if (e.key === "Enter" && e.target.classList?.contains("card")) openDrawer(e.target.dataset.id);
+});
 
 refreshAll();
 startFeed();

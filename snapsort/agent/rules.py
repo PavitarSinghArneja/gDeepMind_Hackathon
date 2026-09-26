@@ -20,7 +20,8 @@ def matches(match: dict, doc_type: str, fields: dict) -> bool:
 
 def describe(match: dict, effect: dict) -> str:
     who = f"{match['issuer'].title()} " if match.get("issuer") else ""
-    what = f"{who}{match['doc_type'].replace('_', ' ')}s"
+    kind = "other documents" if match["doc_type"] == "other" else f"{match['doc_type'].replace('_', ' ')}s"
+    what = f"{who}{kind}"
     if "folder" in effect:
         return f"{what} go to {effect['folder']}"
     if "skip_tool" in effect:

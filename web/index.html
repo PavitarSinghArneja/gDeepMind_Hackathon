@@ -8,41 +8,48 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand">SnapSort <span class="sub">private file agent · Gemma 4 on this laptop</span></div>
-    <div class="pills">
-      <span id="pill-net" class="pill">checking network…</span>
-      <span id="pill-model" class="pill">checking model…</span>
-      <span id="pill-queue" class="pill">…</span>
+    <div class="brand">
+      <h1>SnapSort</h1>
+      <p id="summary" class="summary">Reading your folders…</p>
+    </div>
+    <div class="status" aria-live="polite">
+      <span id="pill-net" class="pill">Checking network</span>
+      <span id="pill-model" class="pill">Checking model</span>
+      <span id="pill-queue" class="pill">–</span>
     </div>
   </header>
 
   <form id="ask" class="ask" autocomplete="off">
-    <input id="ask-q" placeholder="Ask about your files: “what's the WiFi password?”, “when is the electricity bill due?”">
-    <button>Ask</button>
+    <label for="ask-q" class="visually-hidden">Ask about your files</label>
+    <input id="ask-q" placeholder="Ask about your files, e.g. “what's the WiFi password?” or “when is the electricity bill due?”">
+    <button type="submit">Ask</button>
   </form>
-  <div id="answer" class="answer hidden"></div>
+  <div id="answer" class="answer hidden" aria-live="polite"></div>
 
   <main class="grid">
-    <section class="col">
-      <h2>Live activity</h2>
-      <ol id="feed" class="feed"></ol>
+    <section class="col col-inbox" aria-labelledby="h-inbox">
+      <h2 id="h-inbox">Needs you <span id="inbox-count" class="count"></span></h2>
+      <div id="inbox"></div>
+      <h2>Coming up</h2>
+      <ul id="reminders" class="list"></ul>
+      <h2>Rules you taught me</h2>
+      <ul id="rules" class="list"></ul>
     </section>
-    <section class="col wide">
-      <h2>Library</h2>
-      <nav id="tabs" class="tabs"></nav>
+
+    <section class="col col-library" aria-labelledby="h-library">
+      <h2 id="h-library">Library</h2>
+      <nav id="tabs" class="tabs" aria-label="Filter by type"></nav>
       <div id="library" class="cards"></div>
     </section>
-    <section class="col">
-      <h2>Needs you <span id="inbox-count" class="count"></span></h2>
-      <div id="inbox"></div>
-      <h2>Upcoming</h2>
-      <ul id="reminders" class="reminders"></ul>
-      <h2>Learned rules</h2>
-      <ul id="rules" class="rules"></ul>
+
+    <section class="col col-feed" aria-labelledby="h-feed">
+      <h2 id="h-feed">What I'm doing</h2>
+      <ol id="feed" class="feed"></ol>
     </section>
   </main>
 
-  <aside id="drawer" class="drawer hidden"></aside>
+  <div id="scrim" class="scrim hidden"></div>
+  <aside id="drawer" class="drawer hidden" aria-label="File details"></aside>
   <script src="/static/app.js"></script>
 </body>
 </html>
