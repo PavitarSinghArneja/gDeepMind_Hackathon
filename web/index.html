@@ -51,7 +51,8 @@
     </section>
 
     <section class="col col-library" aria-labelledby="h-library">
-      <h2 id="h-library">Library</h2>
+      <div class="lib-head"><h2 id="h-library">Library</h2>
+        <input id="lib-search" type="search" placeholder="Filter by name, company, amount…" aria-label="Filter the library"></div>
       <nav id="tabs" class="tabs" aria-label="Filter by type"></nav>
       <div id="library" class="cards"></div>
     </section>
@@ -62,6 +63,8 @@
     </section>
   </main>
 
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <div id="dropzone" class="dropzone hidden"><p>Drop to let SnapSort sort it</p><span>It stays on this laptop.</span></div>
   <div id="scrim" class="scrim hidden"></div>
   <aside id="drawer" class="drawer hidden" aria-label="File details"></aside>
   <script src="/static/app.js"></script>

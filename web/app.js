@@ -83,17 +83,27 @@ function stateOf(f) {
   return ["Indexed so you can search it", "ok"];
 }
 
+let FILES = [];
+let query = "";
+
 async function refreshLibrary() {
-  const files = await api("/api/files");
+  FILES = await api("/api/files");
+  renderLibrary();
+}
+
+function renderLibrary() {
   const counts = {};
-  files.forEach((f) => { counts[f.doc_type] = (counts[f.doc_type] || 0) + 1; });
+  FILES.forEach((f) => { counts[f.doc_type] = (counts[f.doc_type] || 0) + 1; });
   $("#tabs").innerHTML = Object.entries(TABS)
     .filter(([k]) => k === "all" || counts[k])
-    .map(([k, name]) => `<button class="tab ${k === currentTab ? "on" : ""}" data-tab="${k}" aria-pressed="${k === currentTab}">${name} <small>${k === "all" ? files.length : counts[k]}</small></button>`)
+    .map(([k, name]) => `<button class="tab ${k === currentTab ? "on" : ""}" data-tab="${k}" aria-pressed="${k === currentTab}">${name} <small>${k === "all" ? FILES.length : counts[k]}</small></button>`)
     .join("");
-  const shown = files.filter((f) => currentTab === "all" || f.doc_type === currentTab);
+  const q = query.trim().toLowerCase();
+  const shown = FILES.filter((f) => (currentTab === "all" || f.doc_type === currentTab) &&
+    (!q || [f.title, f.name, f.summary, kindOf(f.doc_type), ...Object.values(f.fields || {}).map(String)].join(" ").toLowerCase().includes(q)));
   $("#library").innerHTML = shown.map(card).join("") ||
-    `<p class="empty">Drop a file into mock/Downloads, mock/Screenshots or mock/Desktop and it will show up here.</p>`;
+    (q ? `<p class="empty">No files match “${esc(query)}”. Try Ask above for questions about what's inside them.</p>`
+       : `<p class="empty">Drop a file anywhere on this page and I'll sort it.</p>`);
 }
 
 function card(f) {
@@ -109,37 +119,68 @@ function card(f) {
   </article>`;
 }
 
-// ---------- needs you ----------
+// ---------- needs you: one headline, one obvious button ----------
 function describeAction(a) {
   if (a.tool === "file_document") return `File it in ${a.args.folder} as ${a.args.name}`;
   if (a.tool === "create_reminder") return `Remind you: ${a.args.title}, by ${a.args.due_date}`;
   if (a.tool === "vault") return "Encrypt it and move it to the vault";
   if (a.tool === "mark_duplicate") return `Mark it as a copy of file ${a.args.of_file_id}`;
   if (a.tool === "flag_for_review") return `Flag for you: ${a.args.reason || ""}`;
-  return `${label(a.tool)} (not allowed, blocked)`;
+  return `${label(a.tool)} (not allowed, so it stays blocked)`;
+}
+
+// Turn the agent's reasons into a short headline and a button that says exactly what will happen.
+function decision(it) {
+  const r = it.reason.toLowerCase();
+  const has = (tool) => it.actions.find((a) => a.tool === tool);
+  const file = has("file_document");
+  const fileLabel = file ? `File in ${file.args.folder}` : "Got it";
+  if (r.includes("password-protected")) return { tone: "info", head: "This PDF is locked with a password", button: "Got it", done: "Noted" };
+  if (r.includes("corrupt")) return { tone: "info", head: "I couldn't open this file", button: "Got it", done: "Noted" };
+  if (r.includes("couldn't process")) return { tone: "bad", head: "Something kept going wrong with this file", button: "Got it", done: "Noted" };
+  if (has("vault")) return { tone: "secret", head: "This shows a password or code", button: "Lock in vault", done: "Locked in the vault" };
+  if (has("mark_duplicate")) return { tone: "info", head: "Looks like a copy of another file", button: "Mark as copy", done: "Marked as a copy" };
+  if (r.includes("instructions aimed at an ai")) return { tone: "bad", head: "This note tries to give me orders. I ignored them", button: fileLabel, done: "Filed safely" };
+  if (r.includes("could be")) return { tone: "info", head: "Check the due date", button: "Confirm date", done: "Date confirmed and filed", showDate: true };
+  if (r.includes("does not appear") || r.includes("no ") && r.includes("found")) return { tone: "info", head: "I'm not sure I read this right", button: file ? `Looks right, ${fileLabel.toLowerCase()}` : "Looks right", done: "Filed" };
+  if (r.includes("% sure")) return { tone: "info", head: "I'm not sure what this is", button: fileLabel, done: "Filed" };
+  if (has("flag_for_review") && r.includes("out of range")) return { tone: "health", head: "Some results are outside the normal range", button: fileLabel, done: "Filed" };
+  if (r.includes("always checked with you")) return { tone: "private", head: `A private ${kindOf(it.doc_type).toLowerCase()} to check`, button: fileLabel, done: "Filed" };
+  return { tone: "info", head: "Needs a quick look", button: file || it.actions.length ? "Approve" : "Got it", done: "Done" };
+}
+
+function detailLines(it) {
+  const flag = it.actions.find((a) => a.tool === "flag_for_review");
+  return flag && flag.args.reason ? flag.args.reason : it.reason.charAt(0).toUpperCase() + it.reason.slice(1);
 }
 
 async function refreshInbox() {
   const items = await api("/api/inbox");
   $("#inbox-count").textContent = items.length || "";
   $("#inbox").innerHTML = items.map((it) => {
+    const d = decision(it);
     const fileAct = it.actions.find((a) => a.tool === "file_document");
     const remind = it.actions.find((a) => a.tool === "create_reminder");
     const doable = it.actions.some((a) => a.tool !== "flag_for_review");
     const folders = fileAct ? [...new Set([fileAct.args.folder, ...STATE.folders])] : [];
-    return `<div class="inbox-item" data-id="${it.id}">
-      <div class="who"><button class="fid link" data-id="${it.file_id}">${esc(it.title || it.name)}</button></div>
-      <div class="kind">${esc(kindOf(it.doc_type))}</div>
-      <p class="reason">${esc(it.reason.charAt(0).toUpperCase() + it.reason.slice(1))}</p>
-      ${it.actions.length ? `<p class="kind">If you approve, I will:</p><ul class="acts">${it.actions.map((a) => `<li>${esc(describeAction(a))}</li>`).join("")}</ul>` : ""}
-      ${fileAct ? `<label>Folder <select class="folder">${folders.map((f) => `<option ${f === fileAct.args.folder ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>` : ""}
-      ${remind ? `<label>Due date <input type="date" class="due" value="${esc(remind.args.due_date)}"></label>` : ""}
+    const dateInput = remind ? `<label>Due date <input type="date" class="due" value="${esc(remind.args.due_date)}"></label>` : "";
+    return `<div class="inbox-item tone-${d.tone}" data-id="${it.id}" data-done="${esc(d.done)}">
+      <p class="headline">${esc(d.head)}</p>
+      <button class="fid link file-name" data-id="${it.file_id}">${esc(it.title || it.name)}</button>
+      <p class="reason">${esc(detailLines(it))}</p>
+      ${d.showDate ? dateInput : ""}
       <div class="btns">
-        <button class="approve primary">${doable ? "Approve" : "Got it"}</button>
-        ${doable ? `<button class="reject">Leave it as is</button><label class="remember"><input type="checkbox" class="learn" checked> Remember this choice</label>` : ""}
+        <button class="approve primary">${esc(d.button)}</button>
+        ${doable ? `<button class="reject quiet">Leave it</button>` : ""}
       </div>
+      ${doable ? `<details class="more"><summary>Other options</summary>
+        ${it.actions.length ? `<p class="kind">Approving will:</p><ul class="acts">${it.actions.map((a) => `<li>${esc(describeAction(a))}</li>`).join("")}</ul>` : ""}
+        ${fileAct ? `<label>Folder <select class="folder">${folders.map((f) => `<option ${f === fileAct.args.folder ? "selected" : ""}>${esc(f)}</option>`).join("")}</select></label>` : ""}
+        ${d.showDate ? "" : dateInput}
+        <label class="remember"><input type="checkbox" class="learn" checked> Remember my choice for similar files</label>
+      </details>` : ""}
     </div>`;
-  }).join("") || `<p class="empty">Nothing needs you right now.</p>`;
+  }).join("") || `<div class="all-clear"><p class="headline">You're all caught up</p><p class="reason">New files are sorted as they arrive. Anything that needs you will appear here.</p></div>`;
 }
 
 async function approveItem(el) {
@@ -149,14 +190,52 @@ async function approveItem(el) {
   const original = folder && [...folder.options].find((o) => o.defaultSelected)?.value;
   if (folder && folder.value !== original) body.folder = folder.value;
   if (due && due.value && due.value !== due.defaultValue) body.due_date = due.value;
-  await post(`/api/inbox/${el.dataset.id}/approve`, body);
+  el.classList.add("leaving");
+  const r = await post(`/api/inbox/${el.dataset.id}/approve`, body);
+  toast(el.dataset.done, r.journal_ids);
   scheduleRefresh();
 }
 
 async function rejectItem(el) {
+  el.classList.add("leaving");
   await post(`/api/inbox/${el.dataset.id}/reject`, { learn: $(".learn", el)?.checked ?? true });
+  toast("Left as it is. I'll remember that for similar files.", []);
   scheduleRefresh();
 }
+
+// ---------- undo bar ----------
+let toastTimer;
+function toast(message, journalIds) {
+  const el = $("#toast");
+  el.innerHTML = `<span>${esc(message)}</span>${journalIds && journalIds.length ? `<button class="toast-undo" data-ids="${journalIds.join(",")}">Undo</button>` : ""}`;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 8000);
+}
+
+async function undoJournal(ids) {
+  for (const id of ids.slice().reverse()) await post(`/api/journal/${id}/undo`);
+  toast("Undone. The file is back where it was.", []);
+  scheduleRefresh();
+}
+
+// ---------- drag and drop ----------
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { if ([...e.dataTransfer.types].includes("Files")) { dragDepth++; $("#dropzone").classList.remove("hidden"); } });
+window.addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; $("#dropzone").classList.add("hidden"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  $("#dropzone").classList.add("hidden");
+  const files = [...(e.dataTransfer?.files || [])];
+  if (!files.length) return;
+  for (const f of files) {
+    await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+  }
+  toast(`Got ${files.length === 1 ? files[0].name : `${files.length} files`}. Watch “What I'm doing” as I sort ${files.length === 1 ? "it" : "them"}.`, []);
+  scheduleRefresh();
+});
 
 // ---------- reminders & rules ----------
 function daysText(d) {
@@ -211,6 +290,7 @@ async function refreshExpenses() {
   dl.setAttribute("aria-disabled", r.rows.length ? "false" : "true");
   dl.textContent = r.rows.length ? `Download ${r.rows.length} as CSV` : "Download CSV";
 }
+document.addEventListener("input", (e) => { if (e.target.id === "lib-search") { query = e.target.value; renderLibrary(); } });
 document.addEventListener("change", (e) => { if (e.target.id === "exp-start" || e.target.id === "exp-end") refreshExpenses(); });
 
 // ---------- the pipeline for one file ----------
@@ -368,20 +448,22 @@ document.addEventListener("click", async (e) => {
     if (has("blur")) return t.classList.remove("blur");
     if (has("fid") || has("card")) return openDrawer(t.dataset.id);
     if (has("preset")) return setRange(t.dataset.range);
-    if (has("tab")) { currentTab = t.dataset.tab; return refreshLibrary(); }
+    if (has("tab")) { currentTab = t.dataset.tab; return renderLibrary(); }
+    if (has("toast-undo")) return undoJournal(t.dataset.ids.split(",").map(Number));
     if (has("approve")) return approveItem(t.closest(".inbox-item"));
     if (has("reject")) return rejectItem(t.closest(".inbox-item"));
-    if (has("done-reminder")) { await post(`/api/reminders/${t.dataset.id}/done`); return scheduleRefresh(); }
+    if (has("done-reminder")) { await post(`/api/reminders/${t.dataset.id}/done`); toast("Marked as paid.", []); return scheduleRefresh(); }
     if (has("undo-reminder")) { await post(`/api/reminders/${t.dataset.id}/undo`); return scheduleRefresh(); }
     if (has("forget")) { await api(`/api/rules/${t.dataset.id}`, { method: "DELETE" }); return scheduleRefresh(); }
     if (has("close")) return closeDrawer();
     if (has("reveal")) return openDrawer(t.dataset.id, true);
-    if (has("undo")) { await post(`/api/journal/${t.dataset.id}/undo`); closeDrawer(); return scheduleRefresh(); }
+    if (has("undo")) { await post(`/api/journal/${t.dataset.id}/undo`); closeDrawer(); toast("Undone.", []); return scheduleRefresh(); }
     if (has("do-refile")) {
       const folder = $(".refile").value;
       if (!folder) return alert("Choose a folder first.");
       await post(`/api/files/${t.dataset.id}/refile`, { folder });
       closeDrawer();
+      toast(`Moved to ${folder}. I'll put similar files there from now on.`, []);
       return scheduleRefresh();
     }
   } catch (err) {

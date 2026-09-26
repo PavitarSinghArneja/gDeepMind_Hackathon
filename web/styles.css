@@ -163,3 +163,30 @@ iframe.preview { height: 320px; }
 .download { background: var(--seal); color: #fff; text-decoration: none; padding: 6px 14px; border-radius: var(--radius-item); font-size: 14px; }
 .download[aria-disabled="true"] { background: var(--rule); color: var(--muted); pointer-events: none; }
 .list li.paid > .link { color: var(--muted); text-decoration: line-through; }
+
+/* ---------- no-thinking-needed layer ---------- */
+.inbox-item { transition: opacity .25s, transform .25s; }
+.inbox-item.leaving { opacity: 0; transform: translateX(-12px); }
+.inbox-item .headline, .all-clear .headline { font: 600 17px/1.3 var(--serif); margin: 0 0 2px; }
+.inbox-item .file-name { font-size: 14px; }
+.inbox-item .reason { font-size: 14px; color: var(--muted); margin: 6px 0 10px; }
+.inbox-item.tone-secret::before, .inbox-item.tone-bad::before { background: var(--wax); }
+.inbox-item.tone-health::before { background: #c79a1c; }
+.inbox-item .btns { margin-top: 4px; }
+.inbox-item .btns .primary { padding: 8px 16px; font-weight: 600; }
+button.quiet { background: transparent; }
+details.more { margin-top: 10px; font-size: 14px; }
+details.more summary { cursor: pointer; color: var(--muted); }
+details.more[open] summary { margin-bottom: 6px; }
+.all-clear { padding: 18px; text-align: center; background: var(--seal-soft); border-radius: var(--radius-item); }
+.all-clear .reason { color: var(--muted); margin: 4px 0 0; }
+.lib-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.lib-head h2 { margin: 0; }
+#lib-search { font: inherit; font-size: 14px; padding: 7px 12px; border: 1px solid var(--rule); border-radius: 999px; min-width: 0; width: min(320px, 55%); background: #fff; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 20; display: flex; gap: 14px; align-items: center;
+         background: var(--ink); color: #fff; padding: 11px 14px 11px 18px; border-radius: 999px; box-shadow: 0 6px 24px rgba(31, 42, 36, .25); max-width: calc(100vw - 32px); }
+.toast button { background: transparent; color: var(--manila); border-color: rgba(255, 255, 255, .35); font-weight: 600; }
+.dropzone { position: fixed; inset: 16px; z-index: 30; border: 3px dashed var(--seal); border-radius: 22px; background: rgba(238, 241, 236, .94);
+            display: grid; place-content: center; text-align: center; pointer-events: none; }
+.dropzone p { font: 600 28px/1.2 var(--serif); margin: 0 0 6px; color: var(--seal); }
+.dropzone span { color: var(--muted); }

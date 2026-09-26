@@ -19,7 +19,7 @@ from ..agent.policy import Policy
 from ..agent.schemas import CATEGORY_FOLDERS
 from ..config import Settings
 from ..llm import LLM, LLMError, LLMUnavailable, installed
-from ..sense.watcher import initial_scan
+from ..sense.watcher import initial_scan, register_file
 
 WEB = Path(__file__).resolve().parents[2] / "web"
 MEDIA = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -254,6 +254,25 @@ def create_app(settings: Settings, llm: LLM, policy: Policy) -> FastAPI:
         name = f"expenses_{start or 'all'}_to_{end or 'now'}.csv"
         events.emit(c, "human", f"You exported {len(rows)} expense(s) to {name}")
         return Response(buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    @app.post("/api/upload")
+    async def upload(request: Request, name: str):
+        """Drag and drop: save the file into a watched folder and let the watcher pick it up like any other."""
+        safe = Path(name).name
+        if not safe or safe.startswith("."):
+            raise HTTPException(400, "That file name can't be used.")
+        folder = settings.watch_dirs[1] if Path(safe).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else settings.watch_dirs[0]
+        dest = tools._unique(folder / safe)
+        data = await request.body()
+        if not data:
+            raise HTTPException(400, "The file was empty.")
+        dest.write_bytes(data)
+        c = db.connect(settings.db_path)
+        try:
+            register_file(c, settings, dest)  # don't wait for the watcher
+        finally:
+            c.close()
+        return {"saved_as": str(dest.relative_to(settings.root))}
 
     @app.post("/api/rescan")
     def rescan(c=Depends(get_conn)):

@@ -93,3 +93,11 @@ def test_mark_paid_logs_and_can_be_undone(client, conn, settings):
     assert any("marked “Pay Airtel” as paid" in e["message"] for e in client.get("/api/events/recent").json())
     client.post(f"/api/reminders/{rid}/undo")
     assert client.get("/api/reminders").json()[0]["paid"] is False
+
+
+def test_upload_saves_into_a_watched_folder_and_queues_it(client, conn, settings):
+    r = client.post("/api/upload?name=../../evil/bill.pdf", content=b"%PDF-1.7 test")
+    assert r.status_code == 200 and r.json()["saved_as"] == "mock/Downloads/bill.pdf"
+    assert (settings.watch_dirs[0] / "bill.pdf").read_bytes() == b"%PDF-1.7 test"
+    assert conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
+    assert client.post("/api/upload?name=shot.png", content=b"img").json()["saved_as"] == "mock/Screenshots/shot.png"
