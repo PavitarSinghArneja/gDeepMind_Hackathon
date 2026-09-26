@@ -12,3 +12,7 @@ demo_video/raw/
 demo_video/audio/
 demo_video/*.mp4
 demo_video/marks.json
+demo_video/audio_pitch/
+demo_video/frames/
+demo_video/frames.txt
+demo_video/pitch_marks.json

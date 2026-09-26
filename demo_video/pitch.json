@@ -1,0 +1,17 @@
+[
+ ["hook", "Your Downloads and Screenshots folders hold your most private documents. Bank statements, lab reports, ID scans, passwords. Putting a chatbot on your laptop doesn't fix that: you'd still have to ask it about every single file. SnapSort is an agent. It sorts, checks and protects those files on its own, fully offline, on Gemma 4."],
+ ["overview", "This is SnapSort, running on my laptop. Gemma 4 E2B sorts each file, Gemma 4 E4B reads the details, and EmbeddingGemma powers search. The header shows zero outside connections. It has already worked through twenty two files. Eleven handled on its own, eleven waiting for me."],
+ ["bar", "The challenge sets a clear bar. A real sense, decide, act, check loop, not a straight arrow. Clear boundaries for human handoff. Local state. And offline error recovery. Let's meet each one, live."],
+ ["loop_drop", "One. A loop, not a straight arrow. I drop in my own blood test report. SnapSort senses the new file and reads it, locally."],
+ ["loop_pipeline", "Here is everything it did. E2B decided it's a lab report. E4B pulled out the results. Plain code checked every value against the document. It planned, applied my privacy rules, and flagged the out of range results for me. After any action, it confirms the change on disk, and rolls back if it didn't land."],
+ ["loop_checks", "Those checks change what happens next. This bill's amount couldn't be confirmed in the text, so it waits for me instead of being filed. And this note tries to order the AI to delete my files. It's treated as data, flagged, and there is no delete tool to misuse."],
+ ["handoff", "Two. Clear boundaries for human handoff, written in one policy file. Filing and reminders run on their own, and can be undone. The vault always asks first. Medical and ID documents, failed checks, and anything under eighty percent confidence always wait for me. Deleting, sharing and uploading aren't possible at all."],
+ ["handoff_demo", "So every decision comes with one clear button. For my lab report, I choose lock in vault. It's now encrypted on disk with a local key, only viewable when I reveal it. And every action offers an undo."],
+ ["state", "Three. Local state. Everything lives in one SQLite file on this laptop: a task queue with checkpoints, a journal of every action, reminders, and rules it learns from me. I move this Airtel bill to Telecom once, and it learns the rule."],
+ ["recovery", "Four. Offline error recovery. I drop in three new files, and kill SnapSort in the middle of its work. No warning."],
+ ["recovery_after", "On restart, it resumes each file from its last finished step, and reconciles anything half done. Nothing is lost. And the rule I just taught it survived the crash: the new Airtel bill goes straight to Telecom. If the model itself stops, files simply wait, without using up their retries."],
+ ["ask", "Built for everyday use. Ask in plain words. Secrets stay blurred until I reveal them, and every answer cites its source."],
+ ["export", "Export expenses for any dates, with amounts it couldn't verify clearly marked. Track bills that are due, mark them paid, and undo anything."],
+ ["results", "On a sixteen gigabyte laptop: twenty two files sorted in under two minutes, zero outside connections, a hard crash recovered with nothing lost, and a hundred and twenty automated tests."],
+ ["outro", "SnapSort. A loop that senses, decides, acts and checks, fully offline on Gemma 4. It keeps its own state, recovers from failure, and knows exactly when to ask."]
+]
