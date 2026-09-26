@@ -63,13 +63,13 @@ def file_detail(conn, root: Path, file_id: int, reveal: bool = False) -> dict | 
 def reminders(conn, today: date | None = None) -> list[dict]:
     today = today or date.today()
     out = []
-    for r in conn.execute("SELECT * FROM reminders WHERE state='active' ORDER BY due_date"):
+    for r in conn.execute("SELECT * FROM reminders WHERE state IN ('active', 'done') ORDER BY state, due_date"):
         try:
             days = (date.fromisoformat(r["due_date"]) - today).days
         except ValueError:
             days = None
         out.append({"id": r["id"], "file_id": r["file_id"], "title": r["title"], "due_date": r["due_date"],
-                    "amount": r["amount"], "days_left": days})
+                    "amount": r["amount"], "days_left": days, "paid": r["state"] == "done"})
     return out
 
 

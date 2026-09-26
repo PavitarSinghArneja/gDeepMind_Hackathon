@@ -83,3 +83,13 @@ def test_expenses_export_filters_by_date(client, conn, settings):
     assert [r["paid_to"] for r in body["rows"]] == ["Chai Point", "Airtel"] and body["total"] == 1629.0
     csv_text = client.get("/api/expenses?start=2026-09-01&end=2026-10-31&format=csv").text
     assert "Airtel,1179.00" in csv_text and "Total,1629.00" in csv_text
+
+
+def test_mark_paid_logs_and_can_be_undone(client, conn, settings):
+    fid = a_file(conn, settings)
+    rid = conn.execute("INSERT INTO reminders(file_id, title, due_date, created_at) VALUES (?, 'Pay Airtel', '2099-01-01', 0)", (fid,)).lastrowid
+    client.post(f"/api/reminders/{rid}/done")
+    assert client.get("/api/reminders").json()[0]["paid"] is True
+    assert any("marked “Pay Airtel” as paid" in e["message"] for e in client.get("/api/events/recent").json())
+    client.post(f"/api/reminders/{rid}/undo")
+    assert client.get("/api/reminders").json()[0]["paid"] is False

@@ -198,7 +198,18 @@ def create_app(settings: Settings, llm: LLM, policy: Policy) -> FastAPI:
 
     @app.post("/api/reminders/{rid}/done")
     def reminder_done(rid: int, c=Depends(get_conn)):
-        c.execute("UPDATE reminders SET state='done' WHERE id=?", (rid,))
+        return _set_reminder(c, rid, "done", "You marked “{}” as paid")
+
+    @app.post("/api/reminders/{rid}/undo")
+    def reminder_undo(rid: int, c=Depends(get_conn)):
+        return _set_reminder(c, rid, "active", "You undid “{}” being paid; it's back in Coming up")
+
+    def _set_reminder(c, rid: int, state: str, message: str):
+        r = c.execute("SELECT * FROM reminders WHERE id=?", (rid,)).fetchone()
+        if r is None:
+            raise HTTPException(404, "no such reminder")
+        c.execute("UPDATE reminders SET state=? WHERE id=?", (state, rid))
+        events.emit(c, "human", message.format(r["title"]), file_id=r["file_id"])
         return {"ok": True}
 
     @app.get("/api/rules")

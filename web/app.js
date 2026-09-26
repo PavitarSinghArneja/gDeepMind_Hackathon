@@ -168,7 +168,10 @@ function daysText(d) {
 
 async function refreshReminders() {
   const rs = await api("/api/reminders");
-  $("#reminders").innerHTML = rs.map((r) => `<li class="${r.days_left !== null && r.days_left <= 3 ? "soon" : ""}">
+  $("#reminders").innerHTML = rs.map((r) => r.paid
+    ? `<li class="paid"><button class="fid link" data-id="${r.file_id}">${esc(r.title)}</button>
+      <span class="when">Paid <button class="undo-reminder small" data-id="${r.id}">Undo</button></span></li>`
+    : `<li class="${r.days_left !== null && r.days_left <= 3 ? "soon" : ""}">
       <button class="fid link" data-id="${r.file_id}">${esc(r.title)}</button>
       <span class="when">${esc(r.due_date)}, ${daysText(r.days_left)} <button class="done-reminder small" data-id="${r.id}">Mark paid</button></span></li>`).join("")
     || `<li class="empty">No payments or renewals coming up.</li>`;
@@ -369,6 +372,7 @@ document.addEventListener("click", async (e) => {
     if (has("approve")) return approveItem(t.closest(".inbox-item"));
     if (has("reject")) return rejectItem(t.closest(".inbox-item"));
     if (has("done-reminder")) { await post(`/api/reminders/${t.dataset.id}/done`); return scheduleRefresh(); }
+    if (has("undo-reminder")) { await post(`/api/reminders/${t.dataset.id}/undo`); return scheduleRefresh(); }
     if (has("forget")) { await api(`/api/rules/${t.dataset.id}`, { method: "DELETE" }); return scheduleRefresh(); }
     if (has("close")) return closeDrawer();
     if (has("reveal")) return openDrawer(t.dataset.id, true);

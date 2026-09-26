@@ -162,3 +162,4 @@ iframe.preview { height: 320px; }
 .export .presets { justify-content: flex-start; }
 .download { background: var(--seal); color: #fff; text-decoration: none; padding: 6px 14px; border-radius: var(--radius-item); font-size: 14px; }
 .download[aria-disabled="true"] { background: var(--rule); color: var(--muted); pointer-events: none; }
+.list li.paid > .link { color: var(--muted); text-decoration: line-through; }
