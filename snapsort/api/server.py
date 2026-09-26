@@ -62,6 +62,14 @@ def network_status() -> dict:
 
 def create_app(settings: Settings, llm: LLM, policy: Policy) -> FastAPI:
     app = FastAPI(title="SnapSort")
+
+    @app.middleware("http")
+    async def no_stale_ui(request: Request, call_next):
+        """Make the browser revalidate the page and its CSS/JS so UI updates show on a normal refresh."""
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
     root = settings.root
 
     def get_conn():

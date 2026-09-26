@@ -4,7 +4,7 @@ are yt# SnapSort: an offline Gemma 4 agent for the documents you'd never upload
 
 ## The problem
 
-Downloads and Screenshots folders fill up with bills, bank statements, payslips, lab reports, ID scans, WiFi passwords and OTPs. They're hard to find and too private for a cloud assistant. The model has to run where the documents are.in
+Downloads and Screenshots folders fill up with bills, bank statements, payslips, lab reports, ID scans, WiFi passwords and OTPs. They're hard to find and too private for a cloud assistant. The model has to run where the documents are.in![alt text](image.png)
 
 ## What it does
 
