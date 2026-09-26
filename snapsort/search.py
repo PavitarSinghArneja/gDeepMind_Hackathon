@@ -16,7 +16,10 @@ SYNONYMS = {
     "wifi": ["wireless", "ssid", "router"], "password": ["passcode", "pin"],
     "electricity": ["power", "tgspdcl", "units"], "salary": ["payslip", "pay"],
     "blood": ["lab", "hba1c", "glucose"], "sugar": ["hba1c", "glucose"], "insurance": ["policy", "health"],
-    "train": ["irctc", "pnr", "ticket"], "rent": ["rental", "agreement"], "internet": ["fiber", "broadband", "airtel"],
+    "train": ["irctc", "pnr", "ticket"], "rent": ["rental", "agreement"],
+    "doctor": ["dr", "rx", "prescription"], "prescribe": ["prescription", "rx", "medicines"], "prescribed": ["prescription", "rx"],
+    "medicine": ["rx", "prescription", "tablet"], "medicines": ["rx", "prescription", "tablet"], "otp": ["otp", "code"],
+    "salary": ["payslip", "net", "pay"], "id": ["identity", "card"], "bank": ["statement", "hdfc"], "internet": ["fiber", "broadband", "airtel"],
 }
 MIN_SIMILARITY = 0.35
 
