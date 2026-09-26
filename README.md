@@ -18,6 +18,7 @@ that should never be uploaded. SnapSort's only network traffic is to Ollama on `
 
 ## The agent loop
 
+
 ```
 sense → dedupe → triage (E2B → E4B if unsure) → extract (E4B → E2B on failure) → CHECK
       → plan (model picks tools, code fills arguments) → policy gate → act (journaled) → CHECK → index
