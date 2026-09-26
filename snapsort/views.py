@@ -102,3 +102,28 @@ def stats(conn) -> dict:
         "checks_failed": one("SELECT COUNT(*) FROM events WHERE stage='verify' AND level='warn'"),
         "blocked": one("SELECT COUNT(*) FROM events WHERE stage='policy'"),
     }
+
+
+EXPENSE_TYPES = {"bill": ("vendor", "due_date"), "payment_receipt": ("payee", "date")}
+
+
+def expenses(conn, root: Path, start: str | None = None, end: str | None = None) -> list[dict]:
+    """Bills and payments with an amount, dated by due date (bills) or payment date (receipts), oldest first."""
+    rows = []
+    for r in conn.execute("SELECT * FROM files WHERE doc_type IN ('bill', 'payment_receipt') AND duplicate_of IS NULL "
+                          "AND status NOT IN ('missing', 'cancelled')"):
+        who_key, date_key = EXPENSE_TYPES[r["doc_type"]]
+        f = db.loads(r["fields_json"], {})
+        when, amount = str(f.get(date_key) or ""), str(f.get("amount") or "").replace(",", "")
+        try:
+            date.fromisoformat(when)
+            value = float(amount)
+        except ValueError:
+            continue
+        if (start and when < start) or (end and when > end):
+            continue
+        rows.append({"date": when, "paid_to": f.get(who_key) or r["title"] or "", "amount": round(value, 2),
+                     "type": "Bill" if r["doc_type"] == "bill" else "Payment", "file": _rel(r["current_path"], root),
+                     "verified": all(c.get("ok") for c in db.loads(r["checks_json"], [])),
+                     "file_id": r["id"]})
+    return sorted(rows, key=lambda x: x["date"])

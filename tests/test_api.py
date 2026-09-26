@@ -71,3 +71,15 @@ def test_ask_without_matches(client):
 def test_recent_events(client, conn, settings):
     a_file(conn, settings)
     assert any("Noticed" in e["message"] for e in client.get("/api/events/recent").json())
+
+
+def test_expenses_export_filters_by_date(client, conn, settings):
+    for i, (dt, fields) in enumerate([("bill", {"vendor": "Airtel", "amount": "1179.00", "due_date": "2026-10-05"}),
+                                      ("payment_receipt", {"payee": "Chai Point", "amount": "450", "date": "2026-09-20"}),
+                                      ("bill", {"vendor": "Old", "amount": "99", "due_date": "2026-01-01"})]):
+        fid = a_file(conn, settings, f"e{i}.png", f"x{i}".encode())
+        conn.execute("UPDATE files SET doc_type=?, fields_json=?, status='done' WHERE id=?", (dt, db.dumps(fields), fid))
+    body = client.get("/api/expenses?start=2026-09-01&end=2026-10-31").json()
+    assert [r["paid_to"] for r in body["rows"]] == ["Chai Point", "Airtel"] and body["total"] == 1629.0
+    csv_text = client.get("/api/expenses?start=2026-09-01&end=2026-10-31&format=csv").text
+    assert "Airtel,1179.00" in csv_text and "Total,1629.00" in csv_text

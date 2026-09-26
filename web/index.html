@@ -32,6 +32,20 @@
       <div id="inbox"></div>
       <h2>Coming up</h2>
       <ul id="reminders" class="list"></ul>
+      <h2>Export expenses</h2>
+      <div class="export">
+        <div class="row presets">
+          <button type="button" class="small preset" data-range="month">This month</button>
+          <button type="button" class="small preset" data-range="quarter">Last 3 months</button>
+          <button type="button" class="small preset" data-range="year">This year</button>
+        </div>
+        <div class="row">
+          <label>From <input type="date" id="exp-start"></label>
+          <label>To <input type="date" id="exp-end"></label>
+        </div>
+        <ul id="exp-list" class="list"></ul>
+        <div class="row"><strong id="exp-total"></strong><a id="exp-download" class="download" href="#">Download CSV</a></div>
+      </div>
       <h2>Rules you taught me</h2>
       <ul id="rules" class="list"></ul>
     </section>

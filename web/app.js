@@ -45,7 +45,7 @@ async function startFeed() {
 
 let refreshTimer;
 function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshAll, 400); }
-function refreshAll() { return Promise.allSettled([refreshState(), refreshLibrary(), refreshInbox(), refreshReminders(), refreshRules()]); }
+function refreshAll() { return Promise.allSettled([refreshState(), refreshLibrary(), refreshInbox(), refreshReminders(), refreshRules(), refreshExpenses()]); }
 
 // ---------- header ----------
 async function refreshState() {
@@ -180,6 +180,35 @@ async function refreshRules() {
       <button class="forget small" data-id="${r.id}">Forget</button></li>`).join("")
     || `<li class="empty">Move a file to a different folder and I'll remember where that kind of file goes.</li>`;
 }
+
+// ---------- export expenses ----------
+const iso = (d) => d.toISOString().slice(0, 10);
+function setRange(kind) {
+  const now = new Date();
+  const start = kind === "month" ? new Date(now.getFullYear(), now.getMonth(), 1)
+    : kind === "quarter" ? new Date(now.getFullYear(), now.getMonth() - 2, 1) : new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 2, 0);  // include bills due next month
+  $("#exp-start").value = iso(new Date(start.getTime() - start.getTimezoneOffset() * 60000));
+  $("#exp-end").value = iso(new Date(end.getTime() - end.getTimezoneOffset() * 60000));
+  refreshExpenses();
+}
+
+async function refreshExpenses() {
+  const q = new URLSearchParams();
+  if ($("#exp-start").value) q.set("start", $("#exp-start").value);
+  if ($("#exp-end").value) q.set("end", $("#exp-end").value);
+  const r = await api(`/api/expenses?${q}`);
+  $("#exp-list").innerHTML = r.rows.map((x) => `<li><span><button class="fid link" data-id="${x.file_id}">${esc(x.paid_to)}</button>
+      <span class="when">${esc(x.date)}, ${esc(x.type.toLowerCase())}${x.verified ? "" : ", not verified"}</span></span><span>₹${x.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></li>`).join("")
+    || `<li class="empty">No bills or payments in these dates.</li>`;
+  $("#exp-total").textContent = r.rows.length ? `Total ₹${r.total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "";
+  const dl = $("#exp-download");
+  q.set("format", "csv");
+  dl.href = `/api/expenses?${q}`;
+  dl.setAttribute("aria-disabled", r.rows.length ? "false" : "true");
+  dl.textContent = r.rows.length ? `Download ${r.rows.length} as CSV` : "Download CSV";
+}
+document.addEventListener("change", (e) => { if (e.target.id === "exp-start" || e.target.id === "exp-end") refreshExpenses(); });
 
 // ---------- the pipeline for one file ----------
 const STEPS = [
@@ -335,6 +364,7 @@ document.addEventListener("click", async (e) => {
   try {
     if (has("blur")) return t.classList.remove("blur");
     if (has("fid") || has("card")) return openDrawer(t.dataset.id);
+    if (has("preset")) return setRange(t.dataset.range);
     if (has("tab")) { currentTab = t.dataset.tab; return refreshLibrary(); }
     if (has("approve")) return approveItem(t.closest(".inbox-item"));
     if (has("reject")) return rejectItem(t.closest(".inbox-item"));
@@ -359,6 +389,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.classList?.contains("card")) openDrawer(e.target.dataset.id);
 });
 
+setRange("quarter");
 refreshAll();
 startFeed();
 setInterval(refreshState, 3000);

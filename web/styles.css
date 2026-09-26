@@ -155,3 +155,10 @@ iframe.preview { height: 320px; }
 .note { color: #8a6a0c; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- export ---------- */
+.export label { font-size: 14px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.export .row { margin-bottom: 8px; justify-content: space-between; }
+.export .presets { justify-content: flex-start; }
+.download { background: var(--seal); color: #fff; text-decoration: none; padding: 6px 14px; border-radius: var(--radius-item); font-size: 14px; }
+.download[aria-disabled="true"] { background: var(--rule); color: var(--muted); pointer-events: none; }

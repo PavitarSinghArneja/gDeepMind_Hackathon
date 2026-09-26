@@ -228,6 +228,22 @@ def create_app(settings: Settings, llm: LLM, policy: Policy) -> FastAPI:
             return {"found": bool(rows), "answer": "The model isn't running, so here are keyword matches.",
                     "files": [views.public_file(r, root) for r in rows], "grounded": True, "sensitive": False}
 
+    @app.get("/api/expenses")
+    def expenses(start: str | None = None, end: str | None = None, format: str = "json", c=Depends(get_conn)):
+        rows = views.expenses(c, root, start, end)
+        if format != "csv":
+            return {"rows": rows, "total": round(sum(r["amount"] for r in rows), 2)}
+        import csv, io
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["Date", "Paid to", "Amount (INR)", "Type", "Verified against document", "File"])
+        for r in rows:
+            w.writerow([r["date"], r["paid_to"], f"{r['amount']:.2f}", r["type"], "yes" if r["verified"] else "no, check it", r["file"]])
+        w.writerow(["", "Total", f"{sum(r['amount'] for r in rows):.2f}", "", "", ""])
+        name = f"expenses_{start or 'all'}_to_{end or 'now'}.csv"
+        events.emit(c, "human", f"You exported {len(rows)} expense(s) to {name}")
+        return Response(buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
     @app.post("/api/rescan")
     def rescan(c=Depends(get_conn)):
         return {"new": initial_scan(c, settings)}
