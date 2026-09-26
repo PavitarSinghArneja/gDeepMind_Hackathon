@@ -3,6 +3,8 @@
 The pitch follows Problem Statement 5 and its bar: a sense-decide-act-check loop, clear boundaries for human
 handoff, local state, and offline error recovery. Each part is shown live, not described.
 
+**Watch it:** https://youtu.be/H9jOFs8JhB4
+
 **Recorded version:** `demo_video/record_pitch.py` drives the real app in Chrome at 1920x1080 and really kills
 SnapSort mid-work; `demo_video/build_pitch.py` cuts the waiting, adds the voice-over and writes
 `snapsort_pitch.mp4` + `snapsort_pitch.srt`. Narration lives in `demo_video/pitch.json`.

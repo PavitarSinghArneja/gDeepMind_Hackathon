@@ -9,6 +9,8 @@ anything sensitive. It runs 100% offline on **Gemma 4 E2B and E4B** through Olla
 Built for the Google DeepMind × GDG Hyderabad hackathon, Problem Statement 5 (local-first agents),
 **track: Personal data**. Writeup: [docs/writeup.md](docs/writeup.md).
 
+**▶ Demo video (3.5 min): https://youtu.be/H9jOFs8JhB4**
+
 ## Why local-first
 
 These files are bank statements, payslips, lab reports, ID scans and WiFi passwords. That's exactly the data
@@ -74,6 +76,8 @@ Other modes: `python -m snapsort --headless` processes everything and prints a r
 Model names can be changed with `SNAPSORT_TRIAGE_MODEL`, `SNAPSORT_WORK_MODEL` and `SNAPSORT_EMBED_MODEL`.
 
 ## Demo
+
+Watch the pitch and live demo: **https://youtu.be/H9jOFs8JhB4**. It shows each part of the Problem Statement 5 bar live, including a real `kill -9` mid-work and the recovery.
 
 `scripts/demo_reset.sh` resets everything. `scripts/drop.sh jio|airtel|lab` drops a file in live.
 The full flow is in [docs/demo-script.md](docs/demo-script.md).
