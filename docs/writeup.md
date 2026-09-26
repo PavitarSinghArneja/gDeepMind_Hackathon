@@ -10,7 +10,9 @@ Downloads and Screenshots folders fill up with bills, bank statements, payslips,
 
 SnapSort watches three folders. Each new file is read, classified, mined for key fields and filed under `library/<Category>/` with a consistent name. Due dates become reminders, secrets get a vault proposal, and anything sensitive or uncertain goes to a "Needs you" inbox. It never deletes and has no network tools. Its only traffic is to Ollama on `127.0.0.1`, and the UI shows the process's non-localhost connection count.
 
-This build runs entirely on **Gemma 4 E2B** (`gemma4:e2b` via Ollama) for triage, extraction and planning, with EmbeddingGemma for search. Extraction and low-confidence escalation can route to E4B via `SNAPSORT_WORK_MODEL=gemma4:e4b`; the demo did not use it.
+It uses both Gemma 4 sizes through Ollama: **E2B** (`gemma4:e2b`) triages and plans every file quickly; **E4B** (`gemma4:e4b`) extracts fields, answers questions and gives a second opinion when E2B is under 80% sure. Model names are environment variables.
+
+The UI asks for no thought: each inbox item has a headline and one button naming the action ("Lock in vault", "Confirm date"); every action offers Undo; files can be dropped onto the page; each file shows its numbered pipeline (conclusion, model, time, checks per step); and expenses export to CSV for any date range, unverified amounts marked.
 
 ## Architecture
 
@@ -20,21 +22,23 @@ mock/{Downloads,Screenshots,Desktop} --watchdog + backlog scan-->
   SENSE > DEDUPE > TRIAGE > EXTRACT > CHECK > PLAN > GATE > ACT > CHECK > INDEX
   OCR     hashes   Gemma    Gemma     code    Gemma  policy journal code   FTS5+vectors
                                               +code  .yaml
-  events --SSE--> FastAPI 127.0.0.1:8765 <-- UI (feed, library, inbox, ask)
-  Ollama 127.0.0.1:11434 (gemma4:e2b, embeddinggemma)
+  events --SSE--> FastAPI 127.0.0.1:8765 <-- UI (inbox, library, per-file pipeline, ask, export)
+  Ollama 127.0.0.1:11434 (gemma4:e2b triage/plan, gemma4:e4b extract/escalate/answer)
 ```
 
 ## The agent loop in detail
 
-1. **Sense.** PyMuPDF reads the text layer; scanned PDFs are rendered and OCR'd with Tesseract. Blurry images are upscaled, sharpened and re-OCR'd. Password-protected and corrupt files go straight to the inbox.
+1. **Sense.** PyMuPDF reads text; scanned PDFs and images are OCR'd with Tesseract (blurry ones enhanced and retried). Locked or corrupt files go straight to the inbox.
 2. **Dedupe.** Identical SHA-256 files are auto-marked duplicates. A near match (dHash distance ≤ 6 *and* ≥ 80% text similarity) becomes a question for you.
-3. **Triage.** Gemma returns type, sensitivity, secret visibility, title and confidence as schema-constrained JSON. Invalid values fall back to safe defaults: unknown sensitivity becomes `high`.
-4. **Extract.** Gemma fills per-type fields such as amount, due date, vendor and test values. Off-spec keys are dropped.
+3. **Triage.** E2B returns type, sensitivity, secret visibility, title and confidence as schema-constrained JSON. Invalid values fall back to safe defaults: unknown sensitivity becomes `high`.
+4. **Extract.** E4B fills per-type fields such as amount, due date, vendor and test values. Off-spec keys are dropped.
 5. **Check.** Deterministic verification (below).
 6. **Plan.** Gemma picks tools from a fixed menu, giving reasons. Code fills exact arguments: folder, `<date>_<type>_<issuer>.<ext>`, reminder date. Unusable plans fall back to per-type defaults; learned rules apply next.
 7. **Gate, act, check, index.** The policy gate sorts actions, tools run through the journal, postconditions are verified, and the file is indexed.
 
-Each stage streams to the UI as plain sentences.
+Each stage streams to the UI as plain sentences and is kept per file, so any file can be opened to see its whole trip through the loop.
+
+**Search and answers.** SQLite FTS5 with synonyms (EmbeddingGemma vectors when Ollama serves embeddings; ours didn't). If keywords miss, E4B reads recent summaries. Answers must cite retrieved files or are shown as unverified; secrets stay blurred until clicked.
 
 ## Verification and safety
 
@@ -43,7 +47,7 @@ Each stage streams to the UI as plain sentences.
 - **Prompt injection.** Prompts mark the document untrusted. A pattern check flags "ignore previous instructions" and sends the file to the inbox. A fooled model still can't delete, share or upload: those tools don't exist.
 - **Allowlist gate.** The gate blocks and logs unlisted tools. Model-influenced folders outside `library/` are refused.
 - **Rollback.** If a postcondition fails (file not at destination, reminder row missing), applied actions are undone in reverse order and the file goes to the inbox.
-- **Encrypted vault.** Secrets are Fernet-encrypted with a local 0600 key; plaintext is removed only after the ciphertext is written. Vaulting always needs approval.
+- **Encrypted vault.** Fernet with a local 0600 key; plaintext is removed only after the ciphertext is written.
 
 ## State and recovery
 
@@ -51,8 +55,8 @@ One SQLite file holds files, tasks, journal, inbox, reminders, rules, events and
 
 - **Checkpoints.** Each stage's output merges into the task checkpoint; on resume, finished stages (and their model calls) are skipped.
 - **Journal before action.** Exact arguments are written as a `pending` row; the tool runs and the row becomes `applied` or `failed`. Resume uses the journal to decide what already ran.
-- **Reconcile after crash.** At boot, interrupted tasks are requeued and each `pending` row is settled from disk: a file at its destination and absent from its source counts as applied; otherwise the recorded path reverts to the source and any half-written ciphertext is removed. The feed shows "resuming N task(s), reconciled M half-finished action(s)".
-- **Model-down deferral.** If Ollama is down or the model isn't pulled, the task waits 10 seconds *without spending an attempt*. Timeouts and bad JSON get one more try down the model list (the same E2B model in this build). Other failures back off, reaching the inbox after 3 attempts. If a model build rejects images, the client switches to text-only.
+- **Reconcile after crash.** At boot, interrupted tasks are requeued and each `pending` row is settled from what's on disk (half-written ciphertext is removed).
+- **Model-down deferral.** If Ollama is down, the task waits 10 s *without spending an attempt*. Timeouts and bad JSON move down the model list (E4B falls back to E2B). Other failures back off, reaching the inbox after 3 attempts. If a model build rejects images, the client switches to text-only.
 
 ## Human handoff
 
@@ -62,43 +66,40 @@ One SQLite file holds files, tasks, journal, inbox, reminders, rules, events and
 |---|---|---|
 | file, remind, mark duplicate (all undoable) | vault, flag for review; **everything** if confidence < 0.8, a check fails, or it's an ID / prescription / lab report | delete, share, upload, send (no such tools exist) |
 
-Without E4B, low-confidence files come straight to you. Inbox items give the reason ("Out of range: HbA1c 7.2 (high)") and offer Approve, Edit (folder, due date) or Leave it.
+Inbox items lead with a short headline and the reason ("Out of range: HbA1c 7.2 (high)"). One button does the recommended action; "Leave it" and edits (folder, due date) sit under "Other options". Every change, including marking a bill paid, is logged and undoable.
 
-**Corrections become rules.** Changing a folder, in the inbox or by moving a filed document, stores a rule keyed on type and issuer ("Airtel bills go to Finance/Telecom"). Rejections store skip rules. The next match shows "Applied your rule #N"; the newest rule wins conflicts.
+**Corrections become rules.** Moving a file stores a rule keyed on type and issuer ("Airtel bills go to Finance/Telecom"); rejections store skip rules; the newest rule wins.
 
 ## Why these technical choices
 
-- **E2B by default.** The job is narrow (classify, fill a schema, pick from five tools) and checks catch mistakes, so the smaller model suffices, leaving memory for OCR.
+- **Two sizes, split by job.** Triage and planning are narrow (classify, pick from five tools), so E2B does them fast. Reading values is where errors cost most, so E4B does it.
 - **The model decides, code executes.** Filenames stay consistent and nothing escapes the library.
-- **Schema-constrained JSON at temperature 0.** Ollama's `format` prevents most parse failures; required-key checks catch the rest.
-- **Verification in code, not another LLM pass.** String grounding is cheap, deterministic and unit-testable, and targets the worst failure: a confidently wrong amount or date.
-- **SQLite for everything.** One transactional file, no daemon.
-- **Remove capabilities, don't trust judgement.** A missing tool can't be misused.
+- **Schema-constrained JSON at temperature 0.** Ollama's `format` plus required-key checks.
+- **Verification in code.** String grounding is cheap, deterministic and testable, and targets the worst failure: a confidently wrong amount or date.
 
 ## Challenges
 
-- **Ambiguous DD/MM dates.** Text can't settle "03/10", so the agent asks.
-- **Similar-looking screenshots.** Hashes rate mostly-white screenshots alike, hence the text-similarity requirement.
-- **Watcher feedback.** The agent's own moves triggered events; updating the stored path *before* each move fixed it.
-- **Gemma 4's thinking mode.** First calls took ~30 s and leaked reasoning into JSON. `think: false` cut a triage call to under 3 s of generation, and sending the image only when OCR text is thin cut it further. With a nested optional `fields` object, E2B returned it empty; making every field required in a flat schema fixed extraction.
+- **Watcher feedback.** The agent's own moves triggered folder events; updating the stored path *before* each move fixed it.
+- **Gemma 4's thinking mode.** First calls took ~30 s and leaked reasoning into JSON; `think: false` and sending images only when OCR text is thin brought calls to ~3 s. E2B left a nested optional `fields` object empty; a flat all-required schema fixed extraction.
 - **Trusting model judgement where code can check.** E2B flagged a TSH of 2.1 (range 0.4 to 4.0) as low and planned no reminder for a bill due in 9 days. Both are now computed in code (flags from the reference range; reminders for any future due date). OCR also read ₹450 as 1450 on a UPI screenshot (a text-first reading limit).
+- **E2B vs E4B on a blurry bill.** E2B returned an amount (₹1,048) that the grounding check couldn't find in the text; E4B left the amount empty rather than guess. Both models together (16.8 GB) exceed the 16 GB machine, so alternating between them costs reload time: about 2.7 s per warm E4B call, but ~20 s for a file when models swap.
 
 ## Results
 
-Setup: Apple M1 Pro, 16 GB RAM, Gemma 4 E2B via Ollama, WiFi off.
+Setup: Apple M1 Pro, 16 GB RAM, Ollama. The backlog numbers below are from the E2B-only run, before E4B was installed.
 
 - Files processed: 22 synthetic files (26 generated; the partial download is ignored and 3 are held back for live drops)
 - Average time per file: 4.9 s end to end; 106 s for the whole backlog
-- Handled automatically: 11 (filed, 2 reminders created, 1 exact duplicate linked). Sent to inbox: 11: lab report (always confirmed; HbA1c and Vitamin D out of range), prescription and ID card (always confirmed), ambiguous 01/10 due date, prompt-injection note, password-protected PDF, corrupt PDF, near-duplicate screenshot, WiFi password and OTP (vault / review), and a blurry bill whose extracted values failed grounding
-- Escalations: none (E4B not enabled in this run)
+- Handled automatically: 11 (filed, 2 reminders created, 1 exact duplicate linked). Sent to inbox: 11 (lab report, prescription, ID card, ambiguous due date, injection note, locked PDF, corrupt PDF, near-duplicate, WiFi password, OTP, blurry bill failing grounding)
+- Escalations: none in that run (E4B wasn't installed yet); escalation is covered by unit tests
 - Checks that caught model errors: 3 files: a blurry screenshot whose model-read amount and account number are absent from the OCR text, an ambiguous numeric due date, and the prompt-injection note
-- `kill -9` mid-backlog: killed 90 s in; on restart 1 task resumed from its 'triage' checkpoint without repeating earlier stages, 0 half-finished actions needed reconciling, and all 22 files completed
+- `kill -9` 90 s in: on restart 1 task resumed from its 'triage' checkpoint without repeating stages, and all 22 files completed
 - Outbound non-localhost connections: 0 (only 127.0.0.1 to Ollama)
-- Tests: 115 passing unit tests using a scripted fake model, plus live tests against real Gemma 4 (`pytest -m live`).
+- Tests: 119 passing unit tests using a scripted fake model, plus live tests against real Gemma 4 (`pytest -m live`).
 
 ## What's next
 
-- Benchmark E4B for accuracy against latency.
+- Benchmark E2B+E4B on a larger labelled set, and keep one model resident on 16 GB machines.
 - Encrypt the database.
 - Add Hindi and Telugu OCR.
 - Build a mobile version on LiteRT.
