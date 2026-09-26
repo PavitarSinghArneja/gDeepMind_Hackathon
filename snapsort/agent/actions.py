@@ -1,3 +1,4 @@
+"""A proposed action, passed between planner, policy gate and tools."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field

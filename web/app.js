@@ -402,7 +402,8 @@ async function openDrawer(id, reveal = false) {
     ${!reveal && masked ? `<button class="reveal" data-id="${id}">Reveal protected values</button>` : ""}
     <p class="where">Now at <b>${esc(d.location)}</b><br>Originally ${esc(d.original_location)}</p>
     ${d.vaulted ? "" : `<div class="row"><label>Move to <select class="refile"><option value="" selected disabled>Choose a folder</option>${STATE.folders.map((f) => `<option>${esc(f)}</option>`).join("")}</select></label>
-      <button class="do-refile small" data-id="${id}">Move</button></div>`}
+      <button class="do-refile small" data-id="${id}">Move</button>
+      <button class="do-vault small" data-id="${id}">Lock in vault</button></div>`}
     ${d.journal.length ? `<h3>Changes I made</h3><ul class="list">${d.journal.map((j) => `<li><span>${esc(describeJournal(j))} <span class="when">${esc(j.status === "applied" ? "done" : j.status)}</span></span>${j.status === "applied" ? `<button class="undo small" data-id="${j.id}">Undo</button>` : ""}</li>`).join("")}</ul>` : ""}`;
   $("#drawer").classList.remove("hidden");
   $("#scrim").classList.remove("hidden");
@@ -461,6 +462,12 @@ document.addEventListener("click", async (e) => {
     if (has("close")) return closeDrawer();
     if (has("reveal")) return openDrawer(t.dataset.id, true);
     if (has("undo")) { await post(`/api/journal/${t.dataset.id}/undo`); closeDrawer(); toast("Undone.", []); return scheduleRefresh(); }
+    if (has("do-vault")) {
+      const r = await post(`/api/files/${t.dataset.id}/vault`);
+      toast("Locked in the encrypted vault", r.journal_ids);
+      scheduleRefresh();
+      return openDrawer(t.dataset.id);
+    }
     if (has("do-refile")) {
       const folder = $(".refile").value;
       if (!folder) return alert("Choose a folder first.");

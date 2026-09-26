@@ -99,3 +99,18 @@ def refile(conn, settings: Settings, file_id: int, folder: str) -> int:
                         action=Action("file_document", {"folder": folder, "name": Path(f["current_path"]).name}, "you moved it"))
     rules.learn(conn, doc_type, fields, {"folder": folder}, "you moved a file")
     return jid
+
+
+def vault_now(conn, settings: Settings, file_id: int) -> int:
+    """The person chose to encrypt this file. Anything still waiting on it in the inbox is settled."""
+    f = conn.execute("SELECT * FROM files WHERE id=?", (file_id,)).fetchone()
+    if f is None:
+        raise KeyError(f"no file {file_id}")
+    if f["vaulted"]:
+        raise tools.ToolError("This file is already in the vault.")
+    jid = tools.execute(conn, settings, task_id=None, file_id=file_id,
+                        action=Action("vault", {"name": Path(f["current_path"]).name}, "you chose to lock it"))
+    for item in conn.execute("SELECT * FROM inbox WHERE file_id=? AND state='open'", (file_id,)).fetchall():
+        _close(conn, item, "approved", {"vaulted_by_you": True, "journal_ids": [jid]})
+    events.emit(conn, "human", f"You locked {f['title'] or 'this file'} in the encrypted vault", file_id=file_id)
+    return jid

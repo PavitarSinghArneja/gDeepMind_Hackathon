@@ -74,3 +74,14 @@ def test_refile_moves_and_learns(conn, settings):
     path = conn.execute("SELECT current_path FROM files WHERE id=?", (fid,)).fetchone()[0]
     assert Path(path).parent.name == "Telecom"
     assert "Finance/Telecom" in conn.execute("SELECT effect_json FROM rules").fetchone()[0]
+
+
+def test_vault_now_encrypts_and_settles_the_inbox(conn, settings):
+    fid, tid = bill(conn, settings)
+    human.open_item(conn, task_id=tid, file_id=fid, reason="lab reports are always checked", actions=[FILE])
+    human.vault_now(conn, settings, fid)
+    row = conn.execute("SELECT vaulted, status, current_path FROM files WHERE id=?", (fid,)).fetchone()
+    assert row["vaulted"] == 1 and row["status"] == "done" and row["current_path"].endswith(".enc")
+    assert human.list_open(conn) == []
+    with pytest.raises(tools.ToolError):
+        human.vault_now(conn, settings, fid)

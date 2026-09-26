@@ -6,7 +6,8 @@ SnapSort watches your Downloads, Screenshots and Desktop folders. It works out w
 matters, files it, reminds you about deadlines, locks secrets in an encrypted vault, and asks you before doing
 anything sensitive. It runs 100% offline on **Gemma 4 E2B and E4B** through Ollama.
 
-Built for the Google DeepMind × GDG Hyderabad hackathon, Problem Statement 5 (local-first agents).
+Built for the Google DeepMind × GDG Hyderabad hackathon, Problem Statement 5 (local-first agents),
+**track: Personal data**. Writeup: [docs/writeup.md](docs/writeup.md).
 
 ## Why local-first
 
@@ -29,6 +30,20 @@ sense → dedupe → triage (E2B → E4B if unsure) → extract (E4B → E2B on 
 - **Recovery:** kill the process at any point; on restart, interrupted tasks resume from their last stage and
   half-finished file moves are reconciled against the disk. If the model isn't running, files wait without losing
   retries.
+
+## How it meets the bar
+
+It isn't a straight arrow from input to output. Each file goes round a loop, and that loop can stop to ask a person.
+The table shows where each requirement is implemented:
+
+| Requirement | What it does | Code |
+|---|---|---|
+| **A loop, not an arrow** | Checks can reject the model's output, escalate from E2B to E4B, roll back actions or hand off; corrections become rules that change later runs | [`Pipeline._stages`](snapsort/agent/pipeline.py#L115), [`verifier`](snapsort/agent/verifier.py), [`rules.learn`](snapsort/agent/rules.py#L32) |
+| **Local state management** | One SQLite file: leased task queue, per-stage checkpoints, write-ahead action journal, inbox, reminders, rules, search index | [`taskq.claim`](snapsort/taskq.py#L19), [`taskq.checkpoint`](snapsort/taskq.py#L41), [`tools.execute`](snapsort/tools.py#L127), [`db.py`](snapsort/db.py) |
+| **Offline error recovery** | Resume from the last checkpoint after `kill -9`; settle half-finished actions from disk; wait when Ollama is down (no retry spent); fall back between models; roll back when a postcondition fails | [`taskq.recover`](snapsort/taskq.py#L80), [`tools.reconcile`](snapsort/tools.py#L204), [`taskq.defer`](snapsort/taskq.py#L58), [`llm.generate_with_fallback`](snapsort/llm.py#L109), [`tools.undo_task`](snapsort/tools.py#L177) |
+| **Clear boundaries for human handoff** | `auto` / `confirm` / `never` lists, a confidence threshold and always-ask document types, checked before any tool runs | [`config/policy.yaml`](config/policy.yaml), [`policy.gate`](snapsort/agent/policy.py#L50), [`human.py`](snapsort/human.py) |
+
+Each one is tested: `tests/test_taskq.py`, `tests/test_tools.py`, `tests/test_policy.py`, `tests/test_pipeline.py`.
 
 ## Human handoff (`config/policy.yaml`)
 
@@ -66,7 +81,7 @@ The full flow is in [docs/demo-script.md](docs/demo-script.md).
 ## Tests
 
 ```bash
-pytest               # ~115 fast tests, no model needed (a scripted fake stands in)
+pytest               # 120 fast tests, no model needed (a scripted fake stands in)
 pytest -m live       # real Gemma 4 through Ollama
 ```
 

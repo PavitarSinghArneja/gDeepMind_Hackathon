@@ -177,6 +177,15 @@ def create_app(settings: Settings, llm: LLM, policy: Policy) -> FastAPI:
             raise HTTPException(409, str(e))
         return {"ok": True}
 
+    @app.post("/api/files/{fid}/vault")
+    def vault_file(fid: int, c=Depends(get_conn)):
+        try:
+            return {"journal_ids": [human.vault_now(c, settings, fid)]}
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        except tools.ToolError as e:
+            raise HTTPException(409, str(e))
+
     @app.get("/api/inbox")
     def inbox(c=Depends(get_conn)):
         return human.list_open(c)
