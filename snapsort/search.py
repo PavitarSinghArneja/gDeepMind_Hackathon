@@ -84,7 +84,7 @@ def search(conn, llm, query: str, k: int = 5) -> list:
         return []
     placeholders = ",".join("?" * len(ids))
     rows = {r["id"]: r for r in conn.execute(
-        f"SELECT * FROM files WHERE id IN ({placeholders}) AND status NOT IN ('missing', 'cancelled')", ids)}
+        f"SELECT * FROM files WHERE id IN ({placeholders}) AND status NOT IN ('missing', 'cancelled') AND duplicate_of IS NULL", ids)}  # copies add nothing
     return [rows[i] for i in ids if i in rows]
 
 
