@@ -132,6 +132,8 @@ def build_actions(llm, settings, *, doc_type: str, triage: dict, extraction: dic
         if a is not None:
             actions.append(a)
 
+    if reminder_date(doc_type, fields, today) and "create_reminder" not in seen:
+        actions.append(_materialize("create_reminder", "there's a payment or renewal date coming up", doc_type, triage, fields, ext, today))
     if triage.get("contains_secret") and "vault" not in seen:
         actions.append(_materialize("vault", "a password or code is visible", doc_type, triage, fields, ext, today))
     if any(a.tool == "vault" for a in actions):
