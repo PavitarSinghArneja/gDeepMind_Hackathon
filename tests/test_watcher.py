@@ -63,3 +63,25 @@ def test_initial_scan_counts_new_files(conn, settings):
         (d / f"f{i}.txt").write_text(f"file {i}")
     assert initial_scan(conn, settings) == 3
     assert initial_scan(conn, settings) == 0
+
+
+def test_deleting_a_finished_file_is_noted_once_and_not_as_a_warning(conn, settings):
+    p = settings.watch_dirs[0] / "done.txt"
+    p.write_text("finished")
+    fid = register_file(conn, settings, p)
+    conn.execute("UPDATE tasks SET state='done'")
+    conn.execute("UPDATE files SET status='done' WHERE id=?", (fid,))
+    p.unlink()
+    mark_missing(conn, p)
+    mark_missing(conn, p)  # macOS often reports the same deletion twice
+    rows = conn.execute("SELECT level, message FROM events WHERE message LIKE '%done.txt%' AND stage='sense' AND level<>'info' OR message LIKE 'You deleted%'").fetchall()
+    assert [r["level"] for r in rows] == ["info"] and "You deleted done.txt" in rows[0]["message"]
+    assert conn.execute("SELECT status FROM files WHERE id=?", (fid,)).fetchone()["status"] == "missing"
+
+
+def test_a_file_that_is_still_there_is_not_marked_missing(conn, settings):
+    p = settings.watch_dirs[0] / "saved.txt"
+    p.write_text("atomic save")
+    fid = register_file(conn, settings, p)
+    mark_missing(conn, p)  # a stale event while the file exists
+    assert conn.execute("SELECT status FROM files WHERE id=?", (fid,)).fetchone()["status"] == "queued"

@@ -53,12 +53,19 @@ def register_file(conn, settings: Settings, path: Path) -> int | None:
 
 
 def mark_missing(conn, path: Path) -> None:
-    row = conn.execute("SELECT id FROM files WHERE current_path=?", (str(path.resolve()),)).fetchone()
-    if row is None:
-        return
+    """A watched file disappeared. Only say something when it matters, and only once."""
+    path = path.resolve()
+    row = conn.execute("SELECT id, status FROM files WHERE current_path=?", (str(path),)).fetchone()
+    if row is None or row["status"] == "missing" or path.exists():
+        return  # our own move, an event we already handled, or the file is back (e.g. an atomic save)
+    unfinished = conn.execute(
+        "SELECT 1 FROM tasks WHERE file_id=? AND state IN ('queued', 'running')", (row["id"],)).fetchone()
     conn.execute("UPDATE files SET status='missing', updated_at=? WHERE id=?", (db.now(), row["id"]))
     conn.execute("UPDATE tasks SET state='cancelled' WHERE file_id=? AND state='queued'", (row["id"],))
-    events.emit(conn, "sense", f"{path.name} was removed before I finished with it", file_id=row["id"], level="warn")
+    if unfinished:
+        events.emit(conn, "sense", f"{path.name} was removed before I finished with it", file_id=row["id"], level="warn")
+    else:
+        events.emit(conn, "sense", f"You deleted {path.name}, so I took it out of the library", file_id=row["id"])
 
 
 def initial_scan(conn, settings: Settings) -> int:
