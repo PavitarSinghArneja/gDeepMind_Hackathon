@@ -21,7 +21,7 @@ SYNONYMS = {
     "medicine": ["rx", "prescription", "tablet"], "medicines": ["rx", "prescription", "tablet"], "otp": ["otp", "code"],
     "salary": ["payslip", "net", "pay"], "id": ["identity", "card"], "bank": ["statement", "hdfc"], "internet": ["fiber", "broadband", "airtel"],
 }
-MIN_SIMILARITY = 0.35
+MIN_SIMILARITY = 0.30
 
 
 def _flatten(value) -> list[str]:
@@ -40,7 +40,8 @@ def index_file(conn, llm, file_id: int) -> bool:
     conn.execute("INSERT INTO files_fts(file_id, title, summary, body, doc_type) VALUES (?,?,?,?,?)",
                  (file_id, f["title"] or "", f["summary"] or "", body, (f["doc_type"] or "").replace("_", " ")))
     try:
-        vector = llm.embed(f"{f['title'] or name}\n{f['summary'] or ''}\n{body[:2000]}")
+        # EmbeddingGemma's document prompt format
+        vector = llm.embed(f"title: {f['title'] or name} | text: {f['summary'] or ''}\n{body[:2000]}")
     except LLMError:
         return False  # keyword search still works
     conn.execute("INSERT OR REPLACE INTO embeddings(file_id, vector_json) VALUES (?,?)", (file_id, db.dumps(vector)))
@@ -70,7 +71,7 @@ def search(conn, llm, query: str, k: int = 5) -> list:
         for rank, r in enumerate(rows):
             scores[r["file_id"]] = scores.get(r["file_id"], 0.0) + 1.0 / (rank + 1)
     try:
-        qv = llm.embed(query)
+        qv = llm.embed(f"task: search result | query: {query}")  # EmbeddingGemma's query prompt format
         sims = sorted(((_cosine(qv, db.loads(r["vector_json"], [])), r["file_id"])
                        for r in conn.execute("SELECT * FROM embeddings")), reverse=True)[:20]
         for rank, (sim, fid) in enumerate(sims):

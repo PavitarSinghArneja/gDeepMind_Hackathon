@@ -1,16 +1,16 @@
-# SnapSort: an offline Gemma 4 agent for the documents you'd never upload
+are yt# SnapSort: an offline Gemma 4 agent for the documents you'd never upload
 
 *Sense, decide, act, check, entirely on your laptop, with a clear line for when it asks you.*
 
 ## The problem
 
-Downloads and Screenshots folders fill up with bills, bank statements, payslips, lab reports, ID scans, WiFi passwords and OTPs. They're hard to find and too private for a cloud assistant. The model has to run where the documents are.
+Downloads and Screenshots folders fill up with bills, bank statements, payslips, lab reports, ID scans, WiFi passwords and OTPs. They're hard to find and too private for a cloud assistant. The model has to run where the documents are.in
 
 ## What it does
 
 SnapSort watches three folders. Each new file is read, classified, mined for key fields and filed under `library/<Category>/` with a consistent name. Due dates become reminders, secrets get a vault proposal, and anything sensitive or uncertain goes to a "Needs you" inbox. It never deletes and has no network tools. Its only traffic is to Ollama on `127.0.0.1`, and the UI shows the process's non-localhost connection count.
 
-It uses both Gemma 4 sizes through Ollama: **E2B** (`gemma4:e2b`) triages and plans every file quickly; **E4B** (`gemma4:e4b`) extracts fields, answers questions and gives a second opinion when E2B is under 80% sure. Model names are environment variables.
+It uses three Gemma models through Ollama: **Gemma 4 E2B** triages and plans every file quickly; **Gemma 4 E4B** extracts fields, answers questions and gives a second opinion when E2B is under 80% sure; **EmbeddingGemma** indexes files for search by meaning. Model names are environment variables.
 
 The UI asks for no thought: each inbox item has a headline and one button naming the action ("Lock in vault", "Confirm date"); every action offers Undo; files can be dropped onto the page; each file shows its numbered pipeline (conclusion, model, time, checks per step); and expenses export to CSV for any date range, unverified amounts marked.
 
@@ -23,7 +23,7 @@ mock/{Downloads,Screenshots,Desktop} --watchdog + backlog scan-->
   OCR     hashes   Gemma    Gemma     code    Gemma  policy journal code   FTS5+vectors
                                               +code  .yaml
   events --SSE--> FastAPI 127.0.0.1:8765 <-- UI (inbox, library, per-file pipeline, ask, export)
-  Ollama 127.0.0.1:11434 (gemma4:e2b triage/plan, gemma4:e4b extract/escalate/answer)
+  Ollama 127.0.0.1:11434 (gemma4:e2b triage/plan, gemma4:e4b extract/answer, embeddinggemma search)
 ```
 
 ## The agent loop in detail
@@ -38,7 +38,7 @@ mock/{Downloads,Screenshots,Desktop} --watchdog + backlog scan-->
 
 Each stage streams to the UI as plain sentences and is kept per file, so any file can be opened to see its whole trip through the loop.
 
-**Search and answers.** SQLite FTS5 with synonyms (EmbeddingGemma vectors when Ollama serves embeddings; ours didn't). If keywords miss, E4B reads recent summaries. Answers must cite retrieved files or are shown as unverified; secrets stay blurred until clicked.
+**Search and answers.** Keyword search (SQLite FTS5 with synonyms) and EmbeddingGemma vectors, merged by reciprocal-rank fusion, using EmbeddingGemma's query and document prompt formats. Answers must cite retrieved files or are shown as unverified; secrets stay blurred until clicked.
 
 ## Verification and safety
 
@@ -73,16 +73,15 @@ Inbox items lead with a short headline and the reason ("Out of range: HbA1c 7.2 
 ## Why these technical choices
 
 - **Two sizes, split by job.** Triage and planning are narrow (classify, pick from five tools), so E2B does them fast. Reading values is where errors cost most, so E4B does it.
-- **The model decides, code executes.** Filenames stay consistent and nothing escapes the library.
 - **Schema-constrained JSON at temperature 0.** Ollama's `format` plus required-key checks.
 - **Verification in code.** String grounding is cheap, deterministic and testable, and targets the worst failure: a confidently wrong amount or date.
 
 ## Challenges
 
-- **Watcher feedback.** The agent's own moves triggered folder events; updating the stored path *before* each move fixed it.
 - **Gemma 4's thinking mode.** First calls took ~30 s and leaked reasoning into JSON; `think: false` and sending images only when OCR text is thin brought calls to ~3 s. E2B left a nested optional `fields` object empty; a flat all-required schema fixed extraction.
-- **Trusting model judgement where code can check.** E2B flagged a TSH of 2.1 (range 0.4 to 4.0) as low and planned no reminder for a bill due in 9 days. Both are now computed in code (flags from the reference range; reminders for any future due date). OCR also read ₹450 as 1450 on a UPI screenshot (a text-first reading limit).
-- **E2B vs E4B on a blurry bill.** E2B returned an amount (₹1,048) that the grounding check couldn't find in the text; E4B left the amount empty rather than guess. Both models together (16.8 GB) exceed the 16 GB machine, so alternating between them costs reload time: about 2.7 s per warm E4B call, but ~20 s for a file when models swap.
+- **Compute what code can check.** E2B flagged a TSH of 2.1 (range 0.4 to 4.0) as low and skipped a reminder for a bill due in 9 days; lab flags and reminders are now computed in code.
+- **Strict grounding.** On a blurry bill both models read ₹1,048 correctly from the image, but the OCR text lacked it, so it went to the inbox: a safe false alarm.
+- **Memory.** E2B and E4B together (16.8 GB) exceed 16 GB, so swapping costs time: ~2.7 s per warm E4B call, ~16 s per file overall.
 
 ## Results
 
@@ -95,14 +94,12 @@ Setup: Apple M1 Pro, 16 GB RAM, Ollama. The backlog numbers below are from the E
 - Checks that caught model errors: 3 files: a blurry screenshot whose model-read amount and account number are absent from the OCR text, an ambiguous numeric due date, and the prompt-injection note
 - `kill -9` 90 s in: on restart 1 task resumed from its 'triage' checkpoint without repeating stages, and all 22 files completed
 - Outbound non-localhost connections: 0 (only 127.0.0.1 to Ollama)
-- Tests: 119 passing unit tests using a scripted fake model, plus live tests against real Gemma 4 (`pytest -m live`).
+- Search, 10 plain-English questions with a known right file (`scripts/eval_search.py`): right file first for 8/10 with keywords only and 9/10 with EmbeddingGemma; in the top 5 for 8/10 vs 10/10. "House lease terms" found the rent agreement only through vectors.
+- Full run with all three models: 22 files in 357 s, same 11/11 split.
+- Tests: 119 passing unit tests using a scripted fake model, plus live tests against real Gemma 4 (`pytest -m live`, 3/3).
 
 ## What's next
 
-- Benchmark E2B+E4B on a larger labelled set, and keep one model resident on 16 GB machines.
-- Encrypt the database.
-- Add Hindi and Telugu OCR.
-- Build a mobile version on LiteRT.
-- Support real user folders with per-folder opt-in.
+A larger labelled benchmark, an encrypted database, Hindi and Telugu OCR, a LiteRT mobile build, and opt-in real folders.
 
 ---
