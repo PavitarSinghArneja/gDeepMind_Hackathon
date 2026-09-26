@@ -91,6 +91,9 @@ def _for_prompt(row) -> str:
 
 def ask(conn, llm, settings, question: str) -> dict:
     rows = search(conn, llm, question)
+    if not rows:  # no keyword hit (and no embeddings): let the model read the summaries of recent files
+        rows = conn.execute("""SELECT * FROM files WHERE status NOT IN ('missing', 'cancelled') AND title IS NOT NULL
+                               ORDER BY updated_at DESC LIMIT 12""").fetchall()
     if not rows:
         return {"found": False, "answer": "I couldn't find anything about that in your files.", "files": [],
                 "grounded": True, "sensitive": False}

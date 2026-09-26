@@ -183,7 +183,7 @@ async function openDrawer(id, reveal = false) {
     ${!reveal && masked ? `<button class="reveal" data-id="${id}">Reveal protected values</button>` : ""}
     ${d.checks.length ? `<h4>Checks</h4><ul class="checks">${d.checks.map((c) => `<li class="${c.ok ? "ok" : "fail"}">${c.ok ? "✓" : "✗"} ${esc(c.detail)}</li>`).join("")}</ul>` : ""}
     <h4>Where it is</h4><p class="path">${esc(d.location)}<br><small>originally ${esc(d.original_location)}</small></p>
-    ${d.vaulted ? "" : `<label>Move to <select class="refile">${STATE.folders.map((f) => `<option>${esc(f)}</option>`).join("")}</select></label> <button class="do-refile small" data-id="${id}">Move</button>`}
+    ${d.vaulted ? "" : `<label>Move to <select class="refile"><option value="" selected disabled>Choose a folder…</option>${STATE.folders.map((f) => `<option>${esc(f)}</option>`).join("")}</select></label> <button class="do-refile small" data-id="${id}">Move</button>`}
     ${d.journal.length ? `<h4>What I did</h4><ul class="rules">${d.journal.map((j) => `<li><span>${esc(label(j.tool))} · ${esc(j.status)}</span>${j.status === "applied" ? `<button class="undo small" data-id="${j.id}">undo</button>` : ""}</li>`).join("")}</ul>` : ""}
     <h4>Timeline</h4><ol class="timeline">${d.timeline.map((e) => `<li class="lvl-${e.level}"><span class="stage">${esc(e.stage)}</span> ${esc(e.message)}</li>`).join("")}</ol>`;
   $("#drawer").classList.remove("hidden");
@@ -224,7 +224,7 @@ document.addEventListener("click", async (e) => {
     if (has("close")) return closeDrawer();
     if (has("reveal")) return openDrawer(t.dataset.id, true);
     if (has("undo")) { await post(`/api/journal/${t.dataset.id}/undo`); closeDrawer(); return scheduleRefresh(); }
-    if (has("do-refile")) { await post(`/api/files/${t.dataset.id}/refile`, { folder: $(".refile").value }); closeDrawer(); return scheduleRefresh(); }
+    if (has("do-refile")) { if (!$(".refile").value) return alert("Choose a folder first."); await post(`/api/files/${t.dataset.id}/refile`, { folder: $(".refile").value }); closeDrawer(); return scheduleRefresh(); }
   } catch (err) {
     alert(err.message);
   }

@@ -17,7 +17,7 @@ class Settings:
     root: Path = ROOT
     ollama_url: str = field(default_factory=lambda: _env("SNAPSORT_OLLAMA_URL", "http://127.0.0.1:11434"))
     triage_model: str = field(default_factory=lambda: _env("SNAPSORT_TRIAGE_MODEL", "gemma4:e2b"))
-    work_model: str = field(default_factory=lambda: _env("SNAPSORT_WORK_MODEL", "gemma4:e2b"))
+    work_model: str = field(default_factory=lambda: _env("SNAPSORT_WORK_MODEL", "gemma4:e4b"))
     embed_model: str = field(default_factory=lambda: _env("SNAPSORT_EMBED_MODEL", "embeddinggemma"))
     llm_timeout_s: float = field(default_factory=lambda: float(_env("SNAPSORT_LLM_TIMEOUT", "180")))
     port: int = field(default_factory=lambda: int(_env("SNAPSORT_PORT", "8765")))
