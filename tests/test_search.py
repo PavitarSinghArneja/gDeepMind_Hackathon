@@ -33,7 +33,7 @@ def test_ask_drops_citations_it_was_not_given(conn, settings):
     llm = FakeLLM({"ask": {"found": True, "answer": "It's due soon", "citations": [999]}}, embed_error=True)
     add(conn, llm, settings, "Airtel bill", "bill", "Airtel Amount Payable Rs 1179")
     out = search.ask(conn, llm, settings, "when is the airtel bill due")
-    assert out["grounded"] is False and out["files"] and "couldn't tie" in out["answer"]
+    assert out["grounded"] is False and out["files"][0]["title"] == "Airtel bill"
 
 
 def test_ask_marks_secret_answers_sensitive(conn, settings):

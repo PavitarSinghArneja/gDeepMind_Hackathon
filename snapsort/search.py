@@ -113,8 +113,9 @@ def ask(conn, llm, settings, question: str) -> dict:
         return {"found": False, "answer": out.get("answer") or "I couldn't find that in your files.", "files": [],
                 "grounded": True, "sensitive": False}
     if not cited:
-        return {"found": True, "grounded": False, "sensitive": False, "files": closest,
-                "answer": "I found something related but couldn't tie an answer to a specific file. Here are the closest matches."}
+        sensitive = any(r["sensitivity"] == "high" or r["doc_type"] == "credential" for r in rows[:3])
+        return {"found": True, "grounded": False, "sensitive": sensitive, "files": closest,  # UI marks it unverified
+                "answer": str(out.get("answer") or "Here are the closest matches.")}
     files = [by_id[c] for c in cited]
     sensitive = any(r["sensitivity"] == "high" or r["doc_type"] == "credential" for r in files)
     return {"found": True, "answer": str(out.get("answer", "")), "grounded": True, "sensitive": sensitive,
