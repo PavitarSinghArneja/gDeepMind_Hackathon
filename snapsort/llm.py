@@ -73,6 +73,7 @@ class OllamaLLM:
             "messages": [message],
             "format": schema,
             "stream": False,
+            "think": False,  # Gemma 4 thinking is slow and leaks text into the JSON
             "keep_alive": "30m",
             "options": {"temperature": 0},
         })

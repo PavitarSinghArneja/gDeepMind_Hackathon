@@ -16,7 +16,7 @@ def triage_prompt(filename: str, text: str) -> str:
 Classify the file (the image of its first page may also be attached).
 doc_type: bill (utility, phone, internet, credit card), bank_statement, payment_receipt (UPI or card payment confirmation), salary_slip, prescription, lab_report, insurance_card, id_document (Aadhaar, PAN, passport, licence, any ID card), credential (passwords, WiFi keys, OTPs, recovery codes), travel_ticket, personal_photo, other.
 sensitivity: high for identity, medical, credentials or full account numbers; medium for other financial documents; low otherwise.
-contains_secret: true only if a password, OTP, PIN or full card/account number is readable.
+contains_secret: true only if a password, WiFi key, OTP, PIN or full debit/credit card number is readable. Account or customer numbers printed on bills and statements are NOT secrets.
 title: 3 to 8 words a person would type to find this file later.
 confidence: 0 to 1, how sure you are about doc_type.
 {_document(filename, text, 3000)}"""

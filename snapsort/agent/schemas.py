@@ -83,16 +83,9 @@ TRIAGE_SCHEMA = {
 
 
 def extract_schema(doc_type: str) -> dict:
-    return {
-        "title": "extract",
-        "type": "object",
-        "properties": {
-            "summary": {"type": "string"},
-            "fields": {"type": "object", "properties": FIELD_SPECS[doc_type]},
-            "confidence": {"type": "number"},
-        },
-        "required": ["summary", "fields", "confidence"],
-    }
+    """Fields sit at the top level and are all required: small models leave optional nested objects empty."""
+    props = {"summary": {"type": "string"}, **FIELD_SPECS[doc_type], "confidence": {"type": "number"}}
+    return {"title": "extract", "type": "object", "properties": props, "required": list(props)}
 
 
 PLAN_SCHEMA = {

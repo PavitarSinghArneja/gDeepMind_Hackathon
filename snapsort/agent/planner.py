@@ -55,8 +55,25 @@ def reminder_date(doc_type: str, fields: dict, today: date) -> str:
     return value
 
 
+def _range_flag(test: dict) -> str | None:
+    """Recompute high/low from the reference range when both are numbers; the model's flag is only a fallback."""
+    nums = re.findall(r"\d+(?:\.\d+)?", str(test.get("reference_range", "")))
+    value = re.findall(r"\d+(?:\.\d+)?", str(test.get("value", "")))
+    if len(nums) < 2 or not value:
+        return None
+    v, lo, hi = float(value[0]), float(nums[0]), float(nums[1])
+    return "low" if v < lo else "high" if v > hi else "normal"
+
+
 def abnormal_tests(fields: dict) -> list[dict]:
-    return [t for t in fields.get("tests") or [] if isinstance(t, dict) and t.get("flag") in ("high", "low")]
+    out = []
+    for t in fields.get("tests") or []:
+        if not isinstance(t, dict):
+            continue
+        flag = _range_flag(t) or t.get("flag")
+        if flag in ("high", "low"):
+            out.append({**t, "flag": flag})
+    return out
 
 
 def _default_plan(doc_type: str, triage: dict, fields: dict, today: date) -> list[tuple[str, str]]:

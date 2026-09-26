@@ -14,7 +14,7 @@ from pathlib import Path
 from .. import db, events, human, search, taskq, tools
 from ..config import Settings
 from ..llm import LLM, LLMError, LLMUnavailable, generate_with_fallback
-from ..sense.extract import Content, extract
+from ..sense.extract import LOW_QUALITY, Content, extract, text_quality
 from ..sense.fingerprint import hamming
 from . import planner, prompts, rules, verifier
 from .actions import Action
@@ -253,12 +253,12 @@ class Pipeline:
         content = self._content(fid, path)
         prompt = prompts.triage_prompt(path.name, content.text)
         out, model = generate_with_fallback(self.llm, [self.settings.triage_model, self.settings.work_model], prompt,
-                                            TRIAGE_SCHEMA, content.images[:1], on_fallback=self._fallback_event(fid))
+                                            TRIAGE_SCHEMA, self._images(content), on_fallback=self._fallback_event(fid))
         best = _clean_triage(out, model, path.name)
         if best["confidence"] < self.policy.confidence_threshold and model != self.settings.work_model:
             events.emit(self.conn, "triage", f"Only {best['confidence']:.0%} sure it's {_a(best['doc_type'])}, so I'm asking {self.settings.work_model}", file_id=fid)
             try:
-                second = _clean_triage(self.llm.generate_json(self.settings.work_model, prompt, TRIAGE_SCHEMA, content.images[:1]),
+                second = _clean_triage(self.llm.generate_json(self.settings.work_model, prompt, TRIAGE_SCHEMA, self._images(content)),
                                        self.settings.work_model, path.name)
                 if second["confidence"] >= best["confidence"]:
                     best = second
@@ -272,8 +272,8 @@ class Pipeline:
         content = self._content(fid, path)
         out, model = generate_with_fallback(self.llm, [self.settings.work_model, self.settings.triage_model],
                                             prompts.extract_prompt(doc_type, path.name, content.text), extract_schema(doc_type),
-                                            content.images[:1], on_fallback=self._fallback_event(fid))
-        raw = out.get("fields") if isinstance(out.get("fields"), dict) else {}
+                                            self._images(content), on_fallback=self._fallback_event(fid))
+        raw = out.get("fields") if isinstance(out.get("fields"), dict) else out
         return {"summary": str(out.get("summary") or "")[:300],
                 "fields": {k: v for k, v in raw.items() if k in FIELD_SPECS[doc_type]},
                 "confidence": _clamp(out.get("confidence")), "model": model}
@@ -289,6 +289,11 @@ class Pipeline:
         return []
 
     # ---------- small helpers ----------
+    @staticmethod
+    def _images(content: Content) -> list[bytes]:
+        """Send the page image only when the text is thin: images cost the small model several seconds."""
+        return content.images[:1] if text_quality(content.text) < LOW_QUALITY * 8 else []
+
     def _content(self, fid: int, path: Path) -> Content:
         if fid not in self._cache:
             self._cache[fid] = extract(path)
