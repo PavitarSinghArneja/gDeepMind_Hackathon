@@ -1,0 +1,12 @@
+watchdog>=4.0
+pymupdf>=1.24
+pytesseract>=0.3.10
+pillow>=10.3
+httpx>=0.27
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pyyaml>=6.0
+cryptography>=42.0
+psutil>=5.9
+pytest>=8.0

@@ -1,0 +1,27 @@
+# Who decides what. The agent can only use tools listed under auto or confirm.
+# Anything else it asks for is blocked and logged.
+
+confidence_threshold: 0.8
+
+# Run on their own. Every one of these can be undone from the UI.
+auto:
+  - file_document
+  - create_reminder
+  - mark_duplicate
+
+# Always ask a person first.
+confirm:
+  - vault
+  - flag_for_review
+
+# These document types always wait for a person, however confident the model is.
+always_confirm_doc_types:
+  - id_document
+  - prescription
+  - lab_report
+
+# Impossible by design: no tool exists for these. Listed so people can see the boundary.
+never:
+  - delete a file
+  - share or upload anything
+  - send data over the network

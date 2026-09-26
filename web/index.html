@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SnapSort</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">SnapSort <span class="sub">private file agent · Gemma 4 on this laptop</span></div>
+    <div class="pills">
+      <span id="pill-net" class="pill">checking network…</span>
+      <span id="pill-model" class="pill">checking model…</span>
+      <span id="pill-queue" class="pill">…</span>
+    </div>
+  </header>
+
+  <form id="ask" class="ask" autocomplete="off">
+    <input id="ask-q" placeholder="Ask about your files: “what's the WiFi password?”, “when is the electricity bill due?”">
+    <button>Ask</button>
+  </form>
+  <div id="answer" class="answer hidden"></div>
+
+  <main class="grid">
+    <section class="col">
+      <h2>Live activity</h2>
+      <ol id="feed" class="feed"></ol>
+    </section>
+    <section class="col wide">
+      <h2>Library</h2>
+      <nav id="tabs" class="tabs"></nav>
+      <div id="library" class="cards"></div>
+    </section>
+    <section class="col">
+      <h2>Needs you <span id="inbox-count" class="count"></span></h2>
+      <div id="inbox"></div>
+      <h2>Upcoming</h2>
+      <ul id="reminders" class="reminders"></ul>
+      <h2>Learned rules</h2>
+      <ul id="rules" class="rules"></ul>
+    </section>
+  </main>
+
+  <aside id="drawer" class="drawer hidden"></aside>
+  <script src="/static/app.js"></script>
+</body>
+</html>
