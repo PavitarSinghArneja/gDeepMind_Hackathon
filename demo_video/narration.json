@@ -1,0 +1,42 @@
+[
+ [
+  "intro",
+  "Our downloads and screenshots folders hold our most private documents. Bank statements, lab reports, passwords. You can't send those to a cloud AI. SnapSort is an agent that sorts them using three Gemma models running entirely on this laptop."
+ ],
+ [
+  "backlog",
+  "It has already worked through twenty two files. Eleven were handled on their own: renamed, filed, and turned into reminders. Eleven are waiting for me, each with a plain reason."
+ ],
+ [
+  "drop_medical",
+  "Let's drop in a real blood test report. Gemma 4 E2B identifies it. Gemma 4 E4B pulls out the test results. Then plain code checks every value against the document before anything happens."
+ ],
+ [
+  "pipeline",
+  "For every file, I can see exactly how the pipeline handled it. Each step, which model ran, how long it took, and which checks passed."
+ ],
+ [
+  "vault",
+  "Medical records always wait for me. I'll lock this one in the vault. It's now encrypted on disk with a local key, and it can only be viewed when I choose to reveal it."
+ ],
+ [
+  "drop_receipt",
+  "Even a coffee receipt gets a second look. It shows part of a card number, so SnapSort offers to lock it away, and asks me first."
+ ],
+ [
+  "inbox",
+  "Anything sensitive comes with one clear button. This screenshot shows a WiFi password, so the button says lock in vault. And every action can be undone."
+ ],
+ [
+  "ask",
+  "I can also just ask. What's my WiFi password? The answer is blurred because it's a secret, and it cites the file it came from."
+ ],
+ [
+  "export",
+  "Bills and payments export to a spreadsheet for any dates. Amounts it couldn't verify against the document are marked."
+ ],
+ [
+  "outro",
+  "Offline. Stateful. It recovers from crashes, and it knows when to ask. That's SnapSort."
+ ]
+]
