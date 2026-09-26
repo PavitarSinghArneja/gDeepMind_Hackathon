@@ -190,3 +190,15 @@ details.more[open] summary { margin-bottom: 6px; }
             display: grid; place-content: center; text-align: center; pointer-events: none; }
 .dropzone p { font: 600 28px/1.2 var(--serif); margin: 0 0 6px; color: var(--seal); }
 .dropzone span { color: var(--muted); }
+
+/* ---------- export modal ---------- */
+.modal { position: fixed; inset: 0; z-index: 15; background: rgba(31, 42, 36, .3); display: grid; place-items: center; padding: 16px; }
+.modal-box { background: var(--sheet); border-radius: var(--radius-sheet); padding: 18px 22px 22px; width: min(560px, 100%); max-height: 85vh; overflow: auto;
+             box-shadow: 0 12px 40px rgba(31, 42, 36, .25); }
+.modal-box .lib-head h2 { margin: 0; }
+.modal-box .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+.col-feed .lib-head { margin: 8px 0 12px; }
+#reminders li, #rules li { flex-direction: column; align-items: stretch; gap: 4px; }
+#reminders li .when, #rules li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#rules li > span { flex: 1; }
+#rules li { flex-direction: row; }

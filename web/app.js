@@ -441,6 +441,7 @@ $("#ask").addEventListener("submit", async (e) => {
 // ---------- clicks & keys ----------
 document.addEventListener("click", async (e) => {
   if (e.target.id === "scrim") return closeDrawer();
+  if (e.target.id === "export-modal") return $("#export-modal").classList.add("hidden");
   const t = e.target.closest("button, .card, .blur");
   if (!t) return;
   const has = (c) => t.classList.contains(c);
@@ -448,6 +449,8 @@ document.addEventListener("click", async (e) => {
     if (has("blur")) return t.classList.remove("blur");
     if (has("fid") || has("card")) return openDrawer(t.dataset.id);
     if (has("preset")) return setRange(t.dataset.range);
+    if (has("open-export")) { $("#export-modal").classList.remove("hidden"); refreshExpenses(); return $(".close-export").focus(); }
+    if (has("close-export")) return $("#export-modal").classList.add("hidden");
     if (has("tab")) { currentTab = t.dataset.tab; return renderLibrary(); }
     if (has("toast-undo")) return undoJournal(t.dataset.ids.split(",").map(Number));
     if (has("approve")) return approveItem(t.closest(".inbox-item"));
@@ -471,7 +474,7 @@ document.addEventListener("click", async (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeDrawer();
+  if (e.key === "Escape") { closeDrawer(); $("#export-modal").classList.add("hidden"); }
   if (e.key === "Enter" && e.target.classList?.contains("card")) openDrawer(e.target.dataset.id);
 });
 

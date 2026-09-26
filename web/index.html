@@ -30,9 +30,32 @@
     <section class="col col-inbox" aria-labelledby="h-inbox">
       <h2 id="h-inbox">Needs you <span id="inbox-count" class="count"></span></h2>
       <div id="inbox"></div>
-      <h2>Coming up</h2>
+    </section>
+
+    <section class="col col-library" aria-labelledby="h-library">
+      <div class="lib-head"><h2 id="h-library">Library</h2>
+        <input id="lib-search" type="search" placeholder="Filter by name, company, amount…" aria-label="Filter the library"></div>
+      <nav id="tabs" class="tabs" aria-label="Filter by type"></nav>
+      <div id="library" class="cards"></div>
+    </section>
+
+    <section class="col col-feed" aria-labelledby="h-coming">
+      <div class="lib-head"><h2 id="h-coming">Coming up</h2>
+        <button type="button" class="small open-export">Export expenses</button></div>
       <ul id="reminders" class="list"></ul>
-      <h2>Export expenses</h2>
+      <h2>Rules you taught me</h2>
+      <ul id="rules" class="list"></ul>
+      <h2 id="h-feed">What I'm doing</h2>
+      <ol id="feed" class="feed"></ol>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  <div id="dropzone" class="dropzone hidden"><p>Drop to let SnapSort sort it</p><span>It stays on this laptop.</span></div>
+  <div id="export-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="h-export">
+    <div class="modal-box">
+      <div class="lib-head"><h2 id="h-export">Export expenses</h2><button type="button" class="small close-export">Close</button></div>
+      <p class="hint">Bills by due date and payments by payment date. Amounts I couldn't verify are marked.</p>
       <div class="export">
         <div class="row presets">
           <button type="button" class="small preset" data-range="month">This month</button>
@@ -46,25 +69,8 @@
         <ul id="exp-list" class="list"></ul>
         <div class="row"><strong id="exp-total"></strong><a id="exp-download" class="download" href="#">Download CSV</a></div>
       </div>
-      <h2>Rules you taught me</h2>
-      <ul id="rules" class="list"></ul>
-    </section>
-
-    <section class="col col-library" aria-labelledby="h-library">
-      <div class="lib-head"><h2 id="h-library">Library</h2>
-        <input id="lib-search" type="search" placeholder="Filter by name, company, amount…" aria-label="Filter the library"></div>
-      <nav id="tabs" class="tabs" aria-label="Filter by type"></nav>
-      <div id="library" class="cards"></div>
-    </section>
-
-    <section class="col col-feed" aria-labelledby="h-feed">
-      <h2 id="h-feed">What I'm doing</h2>
-      <ol id="feed" class="feed"></ol>
-    </section>
-  </main>
-
-  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <div id="dropzone" class="dropzone hidden"><p>Drop to let SnapSort sort it</p><span>It stays on this laptop.</span></div>
+    </div>
+  </div>
   <div id="scrim" class="scrim hidden"></div>
   <aside id="drawer" class="drawer hidden" aria-label="File details"></aside>
   <script src="/static/app.js"></script>
