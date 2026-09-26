@@ -7,7 +7,7 @@ Setup: Ollama running and warm; terminal and browser side by side; WiFi still on
    Turn WiFi off. Point at the header: Offline · 0 outbound connections · Gemma 4 E2B + E4B on-device.
 2. (0:20) `scripts/demo_reset.sh && python -m snapsort`. The feed streams: sense, triage (E2B), extract (E4B), checks, plan, act.
    "Every file goes through a sense, decide, act, check loop, and you can watch it."
-3. (0:45) Mid-backlog, in the terminal: Ctrl+Z, `kill -9 %1`, then `python -m snapsort`.
+3. (0:45) Mid-backlog, in the terminal: `pkill -9 -if "m snapsort"`, then `.venv/bin/python -m snapsort`.
    Point at "Restarted after an interruption: resuming 1 task, reconciled 1 half-finished action".
 4. (1:05) `scripts/drop.sh jio`. The Jio screenshot is filed with a reminder in seconds. Show Upcoming.
 5. (1:20) Needs you: WiFi screenshot → "Move it into the encrypted vault?" → Approve. Lab report → out-of-range values,
